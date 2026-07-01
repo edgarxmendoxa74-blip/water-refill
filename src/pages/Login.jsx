@@ -14,8 +14,8 @@ const Login = () => {
         e.preventDefault();
         setError('');
 
-        // Developer Bypass: Allow login with admin/fiesta2026 if Supabase users aren't setup yet
-        if (email === 'admin@fiestakainan.com' && password === 'fiesta2026') {
+        // Developer Bypass: Allow login with admin/water2026 if Supabase users aren't setup yet
+        if (email === 'admin@waterstation.com' && password === 'water2026') {
             console.log('Developer bypass used');
             localStorage.setItem('admin_bypass', 'true');
             // Refresh page to trigger context update or navigate directly
@@ -39,9 +39,7 @@ const Login = () => {
         <div className="login-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', padding: '20px' }}>
             <div style={{ maxWidth: '450px', width: '100%', background: 'white', padding: '40px', borderRadius: '30px', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}>
                 <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-                    <div style={{ background: 'var(--bg)', padding: '15px', borderRadius: '20px', display: 'inline-block', marginBottom: '20px', border: '1px solid var(--border)' }}>
-                        <img src="/logo.png" alt="Fiesta Kainan sa Cubao" style={{ height: '60px', display: 'block' }} />
-                    </div>
+
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--primary)', marginBottom: '10px' }}>
                         <Lock size={18} />
                         <span style={{ fontWeight: 700, textTransform: 'uppercase', fontSize: '0.8rem', letterSpacing: '1px' }}>Admin Portal</span>
@@ -67,7 +65,7 @@ const Login = () => {
                                 required
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="admin@fiestakainan.com"
+                                placeholder="admin@waterstation.com"
                                 style={{ width: '100%', padding: '15px 15px 15px 45px', borderRadius: '12px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none', transition: 'all 0.3s' }}
                             />
                         </div>

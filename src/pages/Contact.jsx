@@ -5,11 +5,11 @@ import { supabase } from '../supabaseClient';
 
 const Contact = () => {
     const [storeSettings, setStoreSettings] = useState({
-        store_name: 'Fiesta Kainan sa Cubao',
-        address: 'Food Court, Farmers Plaza, General Araneta, Cubao, Quezon City',
-        contact: '0922 811 2858',
-        open_time: '10:00',
-        close_time: '21:00',
+        store_name: 'Water Refill Station',
+        address: '123 Main Street, Your City, Province',
+        contact: '09123456789',
+        open_time: '08:00',
+        close_time: '20:00',
         logo_url: '/logo.png'
     });
 
@@ -35,7 +35,7 @@ const Contact = () => {
             <header className="app-header">
                 <div className="container header-container">
                     <Link to="/" className="brand">
-                        <img src={storeSettings.logo_url || "/logo.png"} alt="Fiesta Kainan sa Cubao Logo" style={{ height: '50px' }} />
+                        <img src={storeSettings.logo_url || "/logo.png"} alt="Water Refill Station Logo" style={{ height: '50px' }} />
                     </Link>
                     <nav className="header-nav" style={{ display: 'flex', gap: '20px' }}>
                         <Link to="/" className="nav-link">Home</Link>
@@ -46,8 +46,8 @@ const Contact = () => {
 
             <main className="container" style={{ padding: '80px 0' }}>
                 <div style={{ textAlign: 'center', marginBottom: '60px' }}>
-                    <h1 style={{ fontSize: '3.5rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '15px' }}>Visit <span style={{ color: 'var(--accent)' }}>Us</span></h1>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>We'd love to serve you the best Filipino fiesta food in town!</p>
+                    <h1 style={{ fontSize: '3.5rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '15px' }}>Contact <span style={{ color: 'var(--accent)' }}>Us</span></h1>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>We're here to serve you with clean, safe drinking water!</p>
                 </div>
 
                 <div className="contact-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px', marginBottom: '60px' }}>
@@ -89,14 +89,14 @@ const Contact = () => {
                     <div style={{ position: 'absolute', bottom: '-10%', left: '-5%', width: '200px', height: '200px', background: 'rgba(255,255,255,0.03)', borderRadius: '50%' }}></div>
 
                     <h2 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '20px' }}>Stay Connected</h2>
-                    <p style={{ marginBottom: '40px', color: 'rgba(255,255,255,0.8)', fontSize: '1.2rem', maxWidth: '600px', margin: '0 auto 40px' }}>Follow us for daily specials, events, and a behind-the-scenes look at our kitchen!</p>
+                    <p style={{ marginBottom: '40px', color: 'rgba(255,255,255,0.8)', fontSize: '1.2rem', maxWidth: '600px', margin: '0 auto 40px' }}>Follow us for special offers, water quality updates, and health tips!</p>
 
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' }}>
-                        <a href="https://www.facebook.com/profile.php?id=61579032505526" target="_blank" rel="noopener noreferrer" className="btn-social" style={{ background: 'white', color: 'var(--primary)', padding: '15px 35px', borderRadius: '50px', textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}>
+                        <a href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer" className="btn-social" style={{ background: 'white', color: 'var(--primary)', padding: '15px 35px', borderRadius: '50px', textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px', boxShadow: '0 10px 20px rgba(0,0,0,0.1)' }}>
                             <Facebook size={22} />
                             Facebook
                         </a>
-                        <a href="mailto:edgarxmendoxa74@gmail.com" className="btn-social" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', padding: '15px 35px', borderRadius: '50px', textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px', backdropFilter: 'blur(10px)' }}>
+                        <a href="mailto:info@waterstation.com" className="btn-social" style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.3)', padding: '15px 35px', borderRadius: '50px', textDecoration: 'none', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '10px', backdropFilter: 'blur(10px)' }}>
                             <Mail size={22} />
                             Email Us
                         </a>

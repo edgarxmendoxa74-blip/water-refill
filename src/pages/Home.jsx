@@ -10,20 +10,21 @@ import {
     Info,
     Facebook,
     Star,
-    Coffee,
     UtensilsCrossed,
     Clock,
     User,
     Trash2,
     Copy,
     CreditCard,
-    ChevronLeft,
-    ChevronRight,
-    AlertCircle
+    AlertCircle,
+    QrCode,
+    MessageCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { categories as initialCategories, menuItems as initialMenuItems } from '../data/MenuData';
 import { supabase } from '../supabaseClient';
+
+// Order types are now evaluated dynamically inside the component
 
 // Helper to safely parse localized storage data
 const getLocalData = (key, fallback) => {
@@ -70,11 +71,11 @@ const MenuItem = React.memo(({ item, isOpen, openProductSelection }) => (
             <h3 className="menu-item-name">{item.name}</h3>
             <p className="menu-item-desc">{item.description}</p>
             <div className="menu-item-footer">
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {item.promo_price ? (
                         <>
-                            <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.8rem' }}>₱{item.price}</span>
                             <span className="menu-item-price" style={{ color: '#ef4444' }}>₱{item.promo_price}</span>
+                            <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.85rem' }}>₱{item.price}</span>
                         </>
                     ) : (
                         <span className="menu-item-price">₱{item.price}</span>
@@ -84,9 +85,10 @@ const MenuItem = React.memo(({ item, isOpen, openProductSelection }) => (
                     className="btn-primary"
                     disabled={item.out_of_stock || !isOpen}
                     onClick={() => openProductSelection(item)}
-                    style={{ padding: '8px 16px', fontSize: '0.8rem', opacity: (item.out_of_stock || !isOpen) ? 0.5 : 1 }}
+                    style={{ padding: '10px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: (item.out_of_stock || !isOpen) ? 0.5 : 1 }}
+                    aria-label="Add to cart"
                 >
-                    <Plus size={14} style={{ marginRight: '5px' }} /> Add to Cart
+                    <Plus size={20} />
                 </button>
             </div>
         </div>
@@ -99,6 +101,17 @@ const Home = () => {
     const [categories, setCategories] = useState(() => getLocalData('categories', initialCategories));
     const [items, setItems] = useState(() => normalizeItems(getLocalData('menuItems', initialMenuItems)));
 
+    // Message state for branded toasts
+    const [message, setMessage] = useState('');
+    const [messageType, setMessageType] = useState('success'); // success, error, warning
+
+    // Branded message function
+    const showBrandedMessage = (msg, type = 'success') => {
+        setMessage(msg);
+        setMessageType(type);
+        setTimeout(() => setMessage(''), 4000);
+    };
+
     // Only show loading if we have ABSOLUTELY no items (rare if initialMenuItems exists)
     const [isLoading, setIsLoading] = useState(items.length === 0);
 
@@ -109,58 +122,45 @@ const Home = () => {
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
     const [paymentSettings, setPaymentSettings] = useState(() => getLocalData('paymentSettings', []));
+    const [deliveryBarangays, setDeliveryBarangays] = useState(() => getLocalData('deliveryBarangays', []));
 
     const [orderTypes, setOrderTypes] = useState(() => getLocalData('orderTypes', [
-        { id: 'dine-in', name: 'Dine-in' },
-        { id: 'pickup', name: 'Take Out' },
-        { id: 'delivery', name: 'Delivery' }
+        { id: 'delivery', name: 'Delivery', is_active: true },
+        { id: 'pickup', name: 'Pick Up', is_active: true }
     ]));
 
     const [storeSettings, setStoreSettings] = useState(() => {
         const fallback = {
             manual_status: 'auto',
-            open_time: '10:00',
-            close_time: '01:00',
-            store_name: 'Fiesta Kainan sa Cubao',
-            address: 'Food Court, Farmers Plaza, General Araneta, Cubao, Quezon City',
-            contact: '0922 811 2858',
+            open_time: '08:00',
+            close_time: '20:00',
+            store_name: 'Water Refill Station',
+            address: '123 Main Street, Your City',
+            contact: '09123456789',
             logo_url: '/logo.png',
-            banner_images: [
-                'https://images.unsplash.com/photo-1517701604599-bb29b565094d?auto=format&fit=crop&w=1200&q=80',
-                'https://images.unsplash.com/photo-1541167760496-162955ed8a9f?auto=format&fit=crop&w=1200&q=80',
-                'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=1200&q=80'
-            ]
+            banner_images: []
         };
         const saved = getLocalData('storeSettings', fallback);
         // Merge saved with fallback to ensure all keys exist
         return {
             ...fallback,
-            ...saved,
-            // Specifically ensure banner_images has some content
-            banner_images: (saved.banner_images && saved.banner_images.length > 0) ? saved.banner_images : fallback.banner_images
+            ...saved
         };
     });
-
-    const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
     const getOrderType = (id) => {
         const type = orderTypes.find(t => t.id === id);
         return type ? type.name : '';
     };
 
-    const isDeliveryType = (id) => {
-        const name = getOrderType(id).toLowerCase();
-        return id === 'cdf90bbb-4ab0-4159-9e3c-4d0f54572483' || name.includes('delivery');
-    };
-
-    const isDineInType = (id) => {
-        const name = getOrderType(id).toLowerCase();
-        return id === 'dine-in' || name.includes('dine-in');
-    };
-
     const isPickupType = (id) => {
         const name = getOrderType(id).toLowerCase();
-        return id === 'pickup' || name.includes('take out') || name.includes('pickup');
+        return id === 'pickup' || id === 'take-out' || name.includes('pick') || name.includes('take');
+    };
+
+    const isDeliveryType = (id) => {
+        const name = getOrderType(id).toLowerCase();
+        return id === 'delivery' || name.includes('delivery');
     };
     const isStoreOpen = () => {
         if (storeSettings.manual_status === 'open') return true;
@@ -206,13 +206,15 @@ const Home = () => {
                     { data: itemData, error: itemErr },
                     { data: payData },
                     { data: typeData },
-                    { data: storeData }
+                    { data: storeData },
+                    { data: bgData }
                 ] = await Promise.all([
                     supabase.from('categories').select('*').order('sort_order', { ascending: true }),
                     supabase.from('menu_items').select('*').order('sort_order', { ascending: true }),
                     supabase.from('payment_settings').select('*').eq('is_active', true).order('created_at', { ascending: true }),
                     supabase.from('order_types').select('*').eq('is_active', true).order('created_at', { ascending: true }),
-                    supabase.from('store_settings').select('*').limit(1).single()
+                    supabase.from('store_settings').select('*').limit(1).maybeSingle(),
+                    supabase.from('delivery_barangays').select('*').eq('status', 'Active').order('barangay_name', { ascending: true })
                 ]);
 
                 if (catErr || itemErr) throw new Error("Supabase fetch failed");
@@ -233,6 +235,7 @@ const Home = () => {
                 // Other settings
                 if (payData && payData.length > 0) { setPaymentSettings(payData); setLocalData('paymentSettings', payData); }
                 if (typeData && typeData.length > 0) { setOrderTypes(typeData); setLocalData('orderTypes', typeData); }
+                if (bgData) { setDeliveryBarangays(bgData); setLocalData('deliveryBarangays', bgData); }
                 if (storeData) {
                     setStoreSettings(prev => ({
                         ...prev,
@@ -252,34 +255,16 @@ const Home = () => {
         fetchUpdates();
     }, []);
 
-    // Slideshow functions
-    const nextBanner = useCallback(() => {
-        const count = (storeSettings.banner_images || []).length;
-        if (count > 0) setCurrentBannerIndex(prev => (prev + 1) % count);
-    }, [storeSettings.banner_images]);
-
-    const prevBanner = useCallback(() => {
-        const count = (storeSettings.banner_images || []).length;
-        if (count > 0) setCurrentBannerIndex(prev => (prev - 1 + count) % count);
-    }, [storeSettings.banner_images]);
-
-    useEffect(() => {
-        const bannerCount = (storeSettings.banner_images || []).length;
-        if (bannerCount === 0) return;
-        const timer = setInterval(nextBanner, 5000);
-        return () => clearInterval(timer);
-    }, [nextBanner, storeSettings.banner_images]);
+    // Slideshow functions removed - no longer using banners
 
     // Selection state for products with options
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [selectionOptions, setSelectionOptions] = useState({
-        variation: null,
-        flavors: [],
-        addons: []
+        variation: null
     });
 
     // Order type and payment state
-    const [orderType, setOrderType] = useState('');
+    const [orderType, setOrderType] = useState('delivery');
     const [paymentMethod, setPaymentMethod] = useState('');
     const [customerDetails, setCustomerDetails] = useState({
         name: '',
@@ -287,21 +272,20 @@ const Home = () => {
         table_number: '',
         address: '',
         landmark: '',
-        pickup_time: ''
+        pickup_time: '',
+        selectedBarangayId: ''
     });
 
     const openProductSelection = useCallback((item) => {
         const firstVariation = (item.variations || []).find(v => !v.disabled);
         setSelectedProduct(item);
         setSelectionOptions({
-            variation: firstVariation || null,
-            flavors: [],
-            addons: []
+            variation: firstVariation || null
         });
     }, []);
 
     const addToCart = (item, options) => {
-        const cartItemId = `${item.id}-${options.variation?.name || ''}-${options.flavors.sort().join(',')}-${options.addons.map(a => a.name).join(',')}`;
+        const cartItemId = `${item.id}-${options.variation?.name || ''}`;
         const existing = cartItems.find(i => i.cartItemId === cartItemId);
 
         const variationPrice = options.variation ? Number(options.variation.price) : 0;
@@ -313,8 +297,7 @@ const Home = () => {
         } else {
             price = variationPrice > 0 ? variationPrice : basePrice;
         }
-        const addonsPrice = options.addons.reduce((sum, a) => sum + Number(a.price), 0);
-        const finalPrice = price + addonsPrice;
+        const finalPrice = price;
 
         if (existing) {
             setCartItems(cartItems.map(i => i.cartItemId === cartItemId ? { ...i, quantity: i.quantity + 1 } : i));
@@ -323,8 +306,6 @@ const Home = () => {
                 ...item,
                 cartItemId,
                 selectedVariation: options.variation,
-                selectedFlavors: options.flavors,
-                selectedAddons: options.addons,
                 finalPrice,
                 quantity: 1
             }]);
@@ -343,20 +324,38 @@ const Home = () => {
     const cartTotal = cartItems.reduce((sum, item) => sum + (item.finalPrice * item.quantity), 0);
     const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+    const selectedBarangay = isDeliveryType(orderType) ? deliveryBarangays.find(b => b.id === customerDetails.selectedBarangayId) : null;
+    const deliveryFee = selectedBarangay ? Number(selectedBarangay.delivery_fee) : 0;
+    const grandTotal = cartTotal + deliveryFee;
+
     const handlePlaceOrder = async () => {
         if (!orderType) {
-            alert('Please select an order type (Dine-in, Pickup, or Delivery).');
+            showBrandedMessage('Please select an order type (Dine-in, Pickup, or Delivery).', 'error');
             return;
         }
 
-        const { name, phone, table_number, address, pickup_time } = customerDetails;
+        const { name, phone, table_number, address, pickup_time, selectedBarangayId } = customerDetails;
         const typeName = getOrderType(orderType).toLowerCase();
 
-        if (isDineInType(orderType) && (!name || !table_number)) { alert('Please provide your Name and Table Number.'); return; }
-        if (isPickupType(orderType) && (!name || !phone || !pickup_time)) { alert('Please provide Name, Phone Number, and Pickup Time.'); return; }
-        if (isDeliveryType(orderType) && (!name || !phone || !address)) { alert('Please provide Name, Phone Number, and Delivery Address.'); return; }
+        if (isPickupType(orderType) && (!name || !phone || !pickup_time)) { 
+            showBrandedMessage('Please provide Name, Phone Number, and Pickup Time.', 'error'); 
+            return; 
+        }
+        if (isDeliveryType(orderType)) {
+            if (!name || !phone || !address) { 
+                showBrandedMessage('Please provide Name, Phone Number, and Delivery Address.', 'error'); 
+                return; 
+            }
+            if (!selectedBarangayId) { 
+                showBrandedMessage('Please select a Delivery Barangay.', 'error'); 
+                return; 
+            }
+        }
 
-        if (!paymentMethod) { alert('Please select a payment method.'); return; }
+        if (!paymentMethod) { 
+            showBrandedMessage('Please select a payment method.', 'error'); 
+            return; 
+        }
 
         setIsSubmitting(true);
 
@@ -364,8 +363,6 @@ const Home = () => {
             const itemDetails = cartItems.map(item => {
                 let d = `${item.name} (x${item.quantity})`;
                 if (item.selectedVariation) d += ` - ${item.selectedVariation.name}`;
-                if (item.selectedFlavors && item.selectedFlavors.length > 0) d += ` [${item.selectedFlavors.join(', ')}]`;
-                if (item.selectedAddons.length > 0) d += ` + ${item.selectedAddons.map(a => a.name).join(', ')}`;
                 return d;
             });
 
@@ -374,14 +371,16 @@ const Home = () => {
                 payment_method: paymentMethod,
                 customer_details: customerDetails,
                 items: itemDetails,
-                total_amount: cartTotal,
+                total_amount: grandTotal,
+                delivery_barangay: selectedBarangay ? selectedBarangay.barangay_name : null,
+                delivery_fee: deliveryFee,
                 status: 'Pending'
             };
 
             const { error } = await supabase.from('orders').insert([newOrder]);
             if (error) {
                 console.error('Error saving order to Supabase:', error);
-                alert('We had trouble saving your order to our system, but you can still proceed to Messenger.');
+                showBrandedMessage('We had trouble saving your order to our system, but you can still proceed to Messenger.', 'warning');
             }
 
             // Backup to LocalStorage
@@ -395,32 +394,41 @@ const Home = () => {
 
             // Prepare Messenger message (simplified to avoid spam detection)
             const summary = itemDetails.join('\n');
-            const typeName = getOrderType(orderType);
             let info = `${isDeliveryType(orderType) ? 'Designated Name' : 'Name'}: ${customerDetails.name}`;
-            if (isDineInType(orderType)) info += ` | Table: ${customerDetails.table_number}`;
             if (isPickupType(orderType)) info += ` | Phone: ${customerDetails.phone} | Time: ${customerDetails.pickup_time}`;
-            if (isDeliveryType(orderType)) info += ` | Phone: ${customerDetails.phone} | Address: ${customerDetails.address}`;
+            if (isDeliveryType(orderType)) {
+                info += ` | Phone: ${customerDetails.phone} | Address: ${customerDetails.address}`;
+                info += ` | Barangay: ${selectedBarangay?.barangay_name || 'N/A'}`;
+            }
 
-            const message = `Hi! New order for ${customerDetails.name}:
+            let message = `Hi! New order for ${customerDetails.name}:
             
 ${summary}
 
-Total: P${cartTotal}
-Type: ${typeName}
+Subtotal: P${cartTotal}`;
+
+            if (isDeliveryType(orderType) && deliveryFee > 0) {
+                message += `\nDelivery Fee: P${deliveryFee}`;
+            }
+
+            message += `\nGrand Total: P${grandTotal}
+Type: ${getOrderType(orderType)}
 ${info}`.trim();
 
-            const messengerUrl = `https://m.me/61579032505526?text=${encodeURIComponent(message)}`;
+            const messengerUrl = `https://m.me/${storeSettings.facebook_messenger_link || '61579032505526'}?text=${encodeURIComponent(message)}`;
 
             setOrderSuccess(true);
             setCartItems([]);
+            showBrandedMessage('Order confirmed! Opening Messenger...', 'success');
 
             const opened = window.open(messengerUrl, '_blank');
             if (!opened) {
                 console.log("Popup blocked or failed to open automatically.");
+                showBrandedMessage('Please allow popups to open Messenger. You can also copy the message above.', 'warning');
             }
         } catch (err) {
             console.error('Order process error:', err);
-            alert('Something went wrong. Please try again or contact us directly.');
+            showBrandedMessage('Something went wrong. Please try again or contact us directly.', 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -443,6 +451,46 @@ ${info}`.trim();
 
     return (
         <div className="page-wrapper">
+            {/* Branded Toast Notification */}
+            {message && (
+                <div style={{
+                    position: 'fixed',
+                    top: '20px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: messageType === 'success' ? 'var(--primary)' : messageType === 'error' ? '#ef4444' : '#f59e0b',
+                    color: messageType === 'success' ? 'var(--text-dark)' : 'white',
+                    padding: '16px 24px',
+                    borderRadius: '12px',
+                    zIndex: 5000,
+                    fontWeight: 700,
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    animation: 'slideDown 0.3s ease-out forwards',
+                    fontSize: '0.95rem'
+                }}>
+                    {messageType === 'success' && (
+                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>✓</div>
+                    )}
+                    {messageType === 'error' && (
+                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>!</div>
+                    )}
+                    {messageType === 'warning' && (
+                        <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>⚠</div>
+                    )}
+                    {message}
+                    <style>{`
+                        @keyframes slideDown {
+                            0% { transform: translate(-50%, -100%); opacity: 0; }
+                            80% { transform: translate(-50%, 10px); }
+                            100% { transform: translate(-50%, 0); opacity: 1; }
+                        }
+                    `}</style>
+                </div>
+            )}
+
             {/* Store Closed Overlay */}
             {!isOpen && (
                 <div style={{ background: 'var(--accent)', color: 'white', textAlign: 'center', padding: '12px', position: 'sticky', top: 0, zIndex: 1200, fontWeight: 700, fontSize: '0.9rem' }}>
@@ -453,13 +501,12 @@ ${info}`.trim();
 
             <header className="app-header">
                 <div className="container header-container">
-                    <Link to="/" className="brand">
-                        <img src={storeSettings.logo_url || "/logo.png"} alt="Fiesta Kainan sa Cubao Logo" style={{ height: '50px' }} />
+                    <Link to="/" className="brand" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img src={storeSettings.logo_url || '/logo.png'} alt={storeSettings.store_name} style={{ height: '40px', width: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                        <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>{storeSettings.store_name}</span>
                     </Link>
 
                     <nav className="header-nav" style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <Link to="/" className="nav-link">Home</Link>
-                        <Link to="/contact" className="nav-link">Contact</Link>
                         <button className="btn-accent" onClick={() => setIsCartOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '10px' }}>
                             <ShoppingBag size={18} />
                             <span>Cart ({cartCount})</span>
@@ -488,50 +535,34 @@ ${info}`.trim();
                 </div>
             </div>
 
-            {/* Hero Section */}
-            <section className="hero-section">
-                <div className="container hero-split">
-                    <div className="hero-content">
-                        <h1>Fiesta Kainan <span style={{ color: 'var(--accent)' }}>sa Cubao</span></h1>
-                        <p>Specializing in <strong>Packed Meals</strong>, <strong>Party Trays</strong>, and <strong>Special Fried Rice</strong>. Experience the authentic taste of a Filipino fiesta in every bite!</p>
+            {/* How to Use QR Order Section */}
+            <section className="hero-section" style={{ background: '#ffffff', color: 'var(--text-color)', padding: '60px 0' }}>
+                <div className="container">
+                    <div style={{ textAlign: 'center', marginBottom: '60px' }}>
+                        <h1 style={{ fontSize: '3rem', fontWeight: 800, marginBottom: '20px', color: 'var(--text-color)' }}>How to order</h1>
+                        <p style={{ fontSize: '1.2rem', color: 'var(--text-muted)', maxWidth: '600px', margin: '0 auto' }}>Fast, easy, and convenient ordering through your mobile device</p>
                     </div>
-                    <div className="hero-image-container">
-                        {(storeSettings.banner_images || []).map((url, i) => (
-                            <img
-                                key={i}
-                                src={url}
-                                alt={`Hero Banner ${i + 1}`}
-                                className={`hero-image ${currentBannerIndex === i ? 'active' : ''}`}
-                                loading={i === 0 ? "eager" : "lazy"}
-                                fetchPriority={i === 0 ? "high" : "auto"}
-                                style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    opacity: currentBannerIndex === i ? 1 : 0,
-                                    zIndex: currentBannerIndex === i ? 1 : 0
-                                }}
-                            />
-                        ))}
 
-                        {/* Navigation Arrows */}
-                        <button className="hero-nav-btn prev" onClick={prevBanner} aria-label="Previous image">
-                            <ChevronLeft size={24} />
-                        </button>
-                        <button className="hero-nav-btn next" onClick={nextBanner} aria-label="Next image">
-                            <ChevronRight size={24} />
-                        </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px', maxWidth: '600px', margin: '0 auto', paddingBottom: '20px' }}>
+                        {/* Step 1 */}
+                        <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '15px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                            <div style={{ background: '#e0f2fe', width: '50px', height: '50px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--primary)' }}><QrCode size={24} /></div>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '5px', fontWeight: 700 }}>Scan QR</h3>
+                            <p style={{ color: 'var(--text-muted)', lineHeight: '1.3', fontSize: '0.8rem', margin: 0 }}>Scan the QR code.</p>
+                        </div>
 
-                        {/* Indicators (Dots) */}
-                        <div className="hero-indicators">
-                            {(storeSettings.banner_images || []).map((_, i) => (
-                                <button
-                                    key={i}
-                                    className={`indicator-dot ${currentBannerIndex === i ? 'active' : ''}`}
-                                    onClick={() => setCurrentBannerIndex(i)}
-                                    aria-label={`Go to slide ${i + 1}`}
-                                />
-                            ))}
+                        {/* Step 2 */}
+                        <div style={{ background: '#f8fafc', padding: '20px', borderRadius: '15px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                            <div style={{ background: '#e0f2fe', width: '50px', height: '50px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--primary)' }}><MessageCircle size={24} /></div>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '5px', fontWeight: 700 }}>Order</h3>
+                            <p style={{ color: 'var(--text-muted)', lineHeight: '1.3', fontSize: '0.8rem', margin: 0 }}>Select items & sizes.</p>
+                        </div>
+
+                        {/* Step 3 */}
+                        <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '20px', borderRadius: '15px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
+                            <div style={{ background: '#e0f2fe', width: '50px', height: '50px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--primary)' }}><MessageCircle size={24} /></div>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '5px', fontWeight: 700 }}>Send Orders</h3>
+                            <p style={{ color: 'var(--text-muted)', lineHeight: '1.3', fontSize: '0.8rem', margin: 0 }}>Send via Messenger.</p>
                         </div>
                     </div>
                 </div>
@@ -539,10 +570,7 @@ ${info}`.trim();
 
 
             <main className="container" id="menu" style={{ padding: '80px 0' }}>
-                <div style={{ textAlign: 'center', marginBottom: '50px' }}>
-                    <h2 style={{ fontSize: '3rem', marginBottom: '10px', color: 'var(--primary)' }}>Our Menu</h2>
-                    <p style={{ color: 'var(--text-muted)' }}>Pick your favorites and add them to your cart.</p>
-                </div>
+
 
                 {isLoading ? (
                     <div style={{ textAlign: 'center', padding: '100px 0' }}>
@@ -607,72 +635,6 @@ ${info}`.trim();
                             </div>
                         )}
 
-                        {selectedProduct.addons && selectedProduct.addons.length > 0 && (
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ fontWeight: 700, display: 'block', marginBottom: '10px' }}>Add-ons (Optional)</label>
-                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                    {selectedProduct.addons.map(a => (
-                                        <button
-                                            key={a.name}
-                                            disabled={a.disabled}
-                                            onClick={() => {
-                                                const exists = selectionOptions.addons.find(x => x.name === a.name);
-                                                if (exists) {
-                                                    setSelectionOptions({ ...selectionOptions, addons: selectionOptions.addons.filter(x => x.name !== a.name) });
-                                                } else {
-                                                    setSelectionOptions({ ...selectionOptions, addons: [...selectionOptions.addons, a] });
-                                                }
-                                            }}
-                                            style={{
-                                                padding: '8px 15px', borderRadius: '10px', border: '1px solid var(--primary)',
-                                                background: selectionOptions.addons.find(x => x.name === a.name) ? 'var(--primary)' : 'white',
-                                                color: selectionOptions.addons.find(x => x.name === a.name) ? 'white' : 'var(--primary)',
-                                                cursor: a.disabled ? 'not-allowed' : 'pointer',
-                                                opacity: a.disabled ? 0.3 : 1
-                                            }}
-                                        >
-                                            + {a.name} (₱{a.price}) {a.disabled && '(Out of Stock)'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        {selectedProduct.flavors && selectedProduct.flavors.length > 0 && (
-                            <div style={{ marginBottom: '20px' }}>
-                                <label style={{ fontWeight: 700, display: 'block', marginBottom: '10px' }}>Select Flavors (You can pick multiple)</label>
-                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                    {selectedProduct.flavors.map(f => {
-                                        const name = typeof f === 'string' ? f : f.name;
-                                        const disabled = typeof f === 'object' ? f.disabled : false;
-                                        if (disabled) return null;
-                                        return (
-                                            <button
-                                                key={name}
-                                                onClick={() => {
-                                                    const exists = selectionOptions.flavors.includes(name);
-                                                    let newFlavors;
-                                                    if (exists) {
-                                                        newFlavors = selectionOptions.flavors.filter(x => x !== name);
-                                                    } else {
-                                                        newFlavors = [...selectionOptions.flavors, name];
-                                                    }
-                                                    setSelectionOptions({ ...selectionOptions, flavors: newFlavors });
-                                                }}
-                                                style={{
-                                                    padding: '8px 15px', borderRadius: '10px',
-                                                    border: '1px solid var(--primary)',
-                                                    background: selectionOptions.flavors.includes(name) ? 'var(--primary)' : 'white',
-                                                    color: selectionOptions.flavors.includes(name) ? 'white' : 'var(--primary)',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                {name}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
 
                         <button className="btn-primary" style={{ width: '100%', padding: '15px', fontWeight: 700, fontSize: '1.1rem' }} onClick={() => addToCart(selectedProduct, selectionOptions)}>
                             Add to Cart - ₱{(
@@ -681,7 +643,7 @@ ${info}`.trim();
                                         ? Number(selectedProduct.promo_price || selectedProduct.price) + Number(selectionOptions.variation.price)
                                         : Number(selectionOptions.variation.price))
                                     : Number(selectedProduct.promo_price || selectedProduct.price)
-                            ) + selectionOptions.addons.reduce((sum, a) => sum + Number(a.price), 0)}
+                            )}
                         </button>
                     </div>
                 </div>
@@ -791,7 +753,7 @@ ${info}`.trim();
                                     <div style={{ marginBottom: '30px' }}>
                                         <label style={{ fontWeight: 700, fontSize: '1rem', display: 'block', marginBottom: '15px' }}>Select Order Type</label>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
-                                            {orderTypes.map(type => (
+                                            {orderTypes.filter(t => t.id !== 'dine-in' && !t.name.toLowerCase().includes('dine')).map(type => (
                                                 <button key={type.id} onClick={() => setOrderType(type.id)} style={{ padding: '8px', fontSize: '0.9rem', borderRadius: '12px', border: '1px solid var(--primary)', background: orderType === type.id ? 'var(--primary)' : 'white', color: orderType === type.id ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}>{type.name}</button>
                                             ))}
                                         </div>
@@ -801,24 +763,59 @@ ${info}`.trim();
                                         <div style={{ marginBottom: '30px' }}>
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                                 <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>{isDeliveryType(orderType) ? 'Designated Name' : 'Full Name'}</label><input type="text" value={customerDetails.name} onChange={(e) => setCustomerDetails({ ...customerDetails, name: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>
-                                                {isDineInType(orderType) && <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Table Number</label><input type="text" value={customerDetails.table_number} onChange={(e) => setCustomerDetails({ ...customerDetails, table_number: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>}
-                                                {!isDineInType(orderType) && <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Phone</label><input type="tel" value={customerDetails.phone} onChange={(e) => setCustomerDetails({ ...customerDetails, phone: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>}
+                                                <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Phone</label><input type="tel" value={customerDetails.phone} onChange={(e) => setCustomerDetails({ ...customerDetails, phone: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>
                                                 {isPickupType(orderType) && <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Time</label><input type="time" value={customerDetails.pickup_time} onChange={(e) => setCustomerDetails({ ...customerDetails, pickup_time: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>}
-                                                {isDeliveryType(orderType) && <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Address</label><textarea value={customerDetails.address} onChange={(e) => setCustomerDetails({ ...customerDetails, address: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>}
-                                                {!isDineInType(orderType) && !isPickupType(orderType) && !isDeliveryType(orderType) && <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Notes / Instructions</label><textarea value={customerDetails.landmark} onChange={(e) => setCustomerDetails({ ...customerDetails, landmark: e.target.value })} placeholder="Any specific requests..." style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>}
+                                                
+                                                {isDeliveryType(orderType) && (
+                                                    <>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Barangay</label>
+                                                            {deliveryBarangays.length > 0 ? (
+                                                                <select value={customerDetails.selectedBarangayId} onChange={(e) => setCustomerDetails({ ...customerDetails, selectedBarangayId: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white' }}>
+                                                                    <option value="" disabled>Select Barangay ▼</option>
+                                                                    {deliveryBarangays.map(b => (
+                                                                        <option key={b.id} value={b.id}>{b.barangay_name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : (
+                                                                <div style={{ color: '#ef4444', fontSize: '0.9rem', padding: '10px', background: '#fee2e2', borderRadius: '8px' }}>Sorry, delivery is currently unavailable as no active barangays are set up.</div>
+                                                            )}
+                                                        </div>
+                                                        <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Address Details</label><textarea value={customerDetails.address} onChange={(e) => setCustomerDetails({ ...customerDetails, address: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>
+                                                    </>
+                                                )}
+                                                
+                                                {!isPickupType(orderType) && !isDeliveryType(orderType) && <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Notes / Instructions</label><textarea value={customerDetails.landmark} onChange={(e) => setCustomerDetails({ ...customerDetails, landmark: e.target.value })} placeholder="Any specific requests..." style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>}
                                             </div>
                                         </div>
                                     )}
 
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                        <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-muted)' }}>Total Amount:</span>
-                                        <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>₱{cartTotal}</span>
-                                    </div>
+                                    {isDeliveryType(orderType) ? (
+                                        <div style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+                                                <span style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>Subtotal:</span>
+                                                <span style={{ fontSize: '1rem', fontWeight: 700 }}>₱{cartTotal}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                                                <span style={{ fontSize: '0.95rem', color: 'var(--text-muted)' }}>Delivery Fee:</span>
+                                                <span style={{ fontSize: '1rem', fontWeight: 700 }}>₱{deliveryFee}</span>
+                                            </div>
+                                            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-muted)' }}>Grand Total:</span>
+                                                <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>₱{grandTotal}</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                            <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-muted)' }}>Total Amount:</span>
+                                            <span style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>₱{grandTotal}</span>
+                                        </div>
+                                    )}
 
                                     <button
                                         className="btn-accent"
                                         onClick={handlePlaceOrder}
-                                        disabled={isSubmitting}
+                                        disabled={isSubmitting || (isDeliveryType(orderType) && deliveryBarangays.length === 0)}
                                         style={{ width: '100%', padding: '18px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: 800, fontSize: '1.1rem', opacity: isSubmitting ? 0.7 : 1 }}
                                     >
                                         {isSubmitting ? (
@@ -835,7 +832,7 @@ ${info}`.trim();
             )}
 
             {isCartOpen && (
-                <div style={{ position: 'fixed', top: 0, right: 0, width: '450px', height: '100vh', background: 'white', boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', zIndex: 1100, padding: '30px', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ position: 'fixed', top: 0, right: 0, width: '100%', maxWidth: '450px', height: '100vh', background: 'white', boxShadow: '-10px 0 30px rgba(0,0,0,0.1)', zIndex: 1100, padding: '20px', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}><h2>Your Cart</h2><button onClick={() => setIsCartOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}><X size={24} /></button></div>
                     <div style={{ flex: 1, overflowY: 'auto' }}>
                         {cartItems.map(item => (
@@ -843,16 +840,17 @@ ${info}`.trim();
                                 <img src={item.image} alt={item.name} style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }} />
                                 <div style={{ flex: 1 }}>
                                     <h4 style={{ margin: 0 }}>{item.name}</h4>
-                                    <p style={{ margin: '2px 0 5px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                        {item.selectedVariation?.name}
-                                        {item.selectedFlavors && item.selectedFlavors.length > 0 ? ` | ${item.selectedFlavors.join(', ')}` : ''}
-                                    </p>
+                                    {item.selectedVariation && (
+                                        <p style={{ margin: '2px 0 5px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                            {item.selectedVariation.name}
+                                        </p>
+                                    )}
                                     <span style={{ fontWeight: 700 }}>₱{item.finalPrice}</span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <button onClick={() => removeFromCart(item.cartItemId)} style={{ border: '1px solid var(--border)', background: 'none', padding: '2px', borderRadius: '4px' }}><Minus size={14} /></button>
                                     <span>{item.quantity}</span>
-                                    <button onClick={() => addToCart(item, { variation: item.selectedVariation, flavors: item.selectedFlavors, addons: item.selectedAddons })} style={{ border: '1px solid var(--border)', background: 'none', padding: '2px', borderRadius: '4px' }}><Plus size={14} /></button>
+                                    <button onClick={() => addToCart(item, { variation: item.selectedVariation })} style={{ border: '1px solid var(--border)', background: 'none', padding: '2px', borderRadius: '4px' }}><Plus size={14} /></button>
                                     <button onClick={() => deleteFromCart(item.cartItemId)} style={{ marginLeft: '5px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}><Trash2 size={16} /></button>
                                 </div>
                             </div>
@@ -861,6 +859,18 @@ ${info}`.trim();
                     <button className="btn-primary" onClick={() => { setIsCartOpen(false); setIsCheckoutOpen(true); }} style={{ width: '100%', padding: '15px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontWeight: 800 }}>Proceed to Checkout</button>
                 </div>
             )}
+            {/* Footer */}
+            <footer style={{ textAlign: 'center', padding: '40px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '40px' }}>
+                <div style={{ marginBottom: '20px' }}>
+                    <h4 style={{ color: 'var(--primary)', marginBottom: '10px', fontWeight: 800 }}>Contact Us</h4>
+                    <p style={{ margin: '5px 0' }}><Phone size={14} style={{ verticalAlign: 'middle', marginRight: '5px' }}/> {storeSettings.contact || '09123456789'}</p>
+                    <p style={{ margin: '5px 0' }}><MapPin size={14} style={{ verticalAlign: 'middle', marginRight: '5px' }}/> {storeSettings.address || '123 Main Street, Your City'}</p>
+                </div>
+                <div>
+                    Powered by: <span style={{ fontWeight: 800, color: 'var(--primary)' }}>Aquascale</span>
+                </div>
+            </footer>
+
         </div>
     );
 };

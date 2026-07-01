@@ -56,9 +56,8 @@ const AdminDashboard = () => {
     const [orderTypes, setOrderTypes] = useState(() => {
         const saved = localStorage.getItem('orderTypes');
         return saved ? JSON.parse(saved) : [
-            { id: 'dine-in', name: 'Dine-in' },
-            { id: 'pickup', name: 'Pickup' },
-            { id: 'delivery', name: 'Delivery' }
+            { id: 'delivery', name: 'Delivery', is_active: true },
+            { id: 'pickup', name: 'Pick Up', is_active: true }
         ];
     });
 
@@ -91,12 +90,18 @@ const AdminDashboard = () => {
             address: 'Poblacion, El Nido, Palawan',
             contact: '09563713967',
             logo_url: '',
+            facebook_messenger_link: '61579032505526', // Facebook Page ID or messenger link
             banner_images: [
                 'https://images.unsplash.com/photo-1517701604599-bb29b565094d?auto=format&fit=crop&w=1200&q=80',
                 'https://images.unsplash.com/photo-1541167760496-162955ed8a9f?auto=format&fit=crop&w=1200&q=80',
                 'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=1200&q=80'
             ]
         };
+    });
+
+    const [deliveryBarangays, setDeliveryBarangays] = useState(() => {
+        const saved = localStorage.getItem('deliveryBarangays');
+        return saved ? JSON.parse(saved) : [];
     });
 
     // --- FETCH DATA FROM SUPABASE ---
@@ -122,6 +127,13 @@ const AdminDashboard = () => {
                 const { data: storeData, error: storeError } = await supabase.from('store_settings').select('*').limit(1).single();
                 if (storeError && storeError.code !== 'PGRST116') throw storeError; // Ignore if no settings record yet
                 if (storeData) setStoreSettings(storeData);
+
+                const { data: bgData, error: bgError } = await supabase.from('delivery_barangays').select('*').order('barangay_name', { ascending: true });
+                if (bgError && bgError.code !== '42P01') throw bgError; // Ignore if table missing initially
+                if (bgData) {
+                    setDeliveryBarangays(bgData);
+                    localStorage.setItem('deliveryBarangays', JSON.stringify(bgData));
+                }
 
                 const { data: orderData, error: orderError } = await supabase.from('orders').select('*').order('timestamp', { ascending: false });
                 if (orderError) throw orderError;
@@ -194,14 +206,10 @@ const AdminDashboard = () => {
         const [searchTerm, setSearchTerm] = useState('');
         const [filterCategory, setFilterCategory] = useState('all');
         const [tempVariations, setTempVariations] = useState([]);
-        const [tempFlavors, setTempFlavors] = useState([]);
-        const [tempAddons, setTempAddons] = useState([]);
 
         useEffect(() => {
             if (editingItem) {
                 setTempVariations(editingItem.variations || []);
-                setTempFlavors(editingItem.flavors || []);
-                setTempAddons(editingItem.addons || []);
             }
         }, [editingItem]);
 
@@ -216,8 +224,6 @@ const AdminDashboard = () => {
                 category_id: formData.get('categoryId'),
                 image: editingItem.image || 'https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&w=500&q=80',
                 variations: tempVariations,
-                flavors: tempFlavors,
-                addons: tempAddons,
                 out_of_stock: formData.get('outOfStock') === 'on'
             };
 
@@ -326,9 +332,9 @@ const AdminDashboard = () => {
                                     </td>
                                     <td style={{ padding: '15px' }}>
                                         {item.promo_price ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.8rem' }}>₱{item.price}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <span style={{ color: '#ef4444', fontWeight: 700 }}>₱{item.promo_price}</span>
+                                                <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.85rem' }}>₱{item.price}</span>
                                             </div>
                                         ) : <span style={{ fontWeight: 700 }}>₱{item.price}</span>}
                                     </td>
@@ -395,56 +401,6 @@ const AdminDashboard = () => {
                                 <label style={{ fontSize: '0.75rem' }}>Disabled</label>
                             </div>
                             <button type="button" onClick={() => setTempVariations(tempVariations.filter((_, idx) => idx !== i))} style={{ color: 'red', border: 'none', background: 'none' }}><X size={18} /></button>
-                        </div>
-                    ))}
-
-                    {/* Flavors */}
-                    <SectionLabel title="Flavors" onAdd={() => setTempFlavors([...tempFlavors, { name: '', disabled: false }])} />
-                    {tempFlavors.map((f, i) => {
-                        const name = typeof f === 'string' ? f : f.name;
-                        const disabled = typeof f === 'object' ? f.disabled : false;
-                        return (
-                            <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
-                                <input
-                                    value={name}
-                                    onChange={e => {
-                                        const n = [...tempFlavors];
-                                        if (typeof n[i] === 'string') n[i] = { name: e.target.value, disabled: false };
-                                        else n[i] = { ...n[i], name: e.target.value };
-                                        setTempFlavors(n);
-                                    }}
-                                    placeholder="Flavor Name (e.g. Buffalo)"
-                                    style={inputStyle}
-                                />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={disabled}
-                                        onChange={e => {
-                                            const n = [...tempFlavors];
-                                            if (typeof n[i] === 'string') n[i] = { name: n[i], disabled: e.target.checked };
-                                            else n[i] = { ...n[i], disabled: e.target.checked };
-                                            setTempFlavors(n);
-                                        }}
-                                    />
-                                    <label style={{ fontSize: '0.75rem' }}>Disabled</label>
-                                </div>
-                                <button type="button" onClick={() => setTempFlavors(tempFlavors.filter((_, idx) => idx !== i))} style={{ color: 'red', border: 'none', background: 'none' }}><X size={18} /></button>
-                            </div>
-                        );
-                    })}
-
-                    {/* Addons */}
-                    <SectionLabel title="Add-ons" onAdd={() => setTempAddons([...tempAddons, { name: 'Addon', price: 0 }])} />
-                    {tempAddons.map((v, i) => (
-                        <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '10px', alignItems: 'center' }}>
-                            <input value={v.name} onChange={e => { const n = [...tempAddons]; n[i].name = e.target.value; setTempAddons(n); }} placeholder="Name" style={inputStyle} />
-                            <input type="number" value={v.price} onChange={e => { const n = [...tempAddons]; n[i].price = Number(e.target.value); setTempAddons(n); }} placeholder="Price" style={inputStyle} />
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
-                                <input type="checkbox" checked={v.disabled} onChange={e => { const n = [...tempAddons]; n[i].disabled = e.target.checked; setTempAddons(n); }} />
-                                <label style={{ fontSize: '0.75rem' }}>Disabled</label>
-                            </div>
-                            <button type="button" onClick={() => setTempAddons(tempAddons.filter((_, idx) => idx !== i))} style={{ color: 'red', border: 'none', background: 'none' }}><X size={18} /></button>
                         </div>
                     ))}
 
@@ -559,9 +515,8 @@ const AdminDashboard = () => {
     // --- COMPONENT: ORDER TYPE MANAGER ---
     const OrderTypeManager = () => {
         const FIXED_TYPES = [
-            { id: 'dine-in', name: 'Dine-in', defaultActive: true },
-            { id: 'pickup', name: 'Take Out', defaultActive: true },
-            { id: 'delivery', name: 'Delivery', defaultActive: true }
+            { id: 'delivery', name: 'Delivery', defaultActive: true },
+            { id: 'pickup', name: 'Pick Up', defaultActive: true }
         ];
 
         const [localTypes, setLocalTypes] = useState([]);
@@ -655,6 +610,7 @@ const AdminDashboard = () => {
     const PaymentSettings = () => {
         const [editingMethodId, setEditingMethodId] = useState(null);
         const [showAddMethod, setShowAddMethod] = useState(false);
+        const [isCompressing, setIsCompressing] = useState(false);
 
         const handleSaveMethod = async (e, methodId) => {
             e.preventDefault();
@@ -669,6 +625,48 @@ const AdminDashboard = () => {
             setPaymentSettings(paymentSettings.map(m => m.id === methodId ? data : m));
             setEditingMethodId(null);
             showMessage('Payment method updated!');
+        };
+
+        const handleFileUpload = (e, methodId) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            setIsCompressing(true);
+            showMessage('Compressing image...');
+
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+                try {
+                    const base64Str = reader.result;
+                    // Compress image before uploading
+                    const compressed = await compressImage(base64Str, 600, 0.8);
+                    
+                    const { data, error } = await supabase.from('payment_settings').update({ qr_url: compressed }).eq('id', methodId).select().single();
+                    if (error) { 
+                        console.error(error); 
+                        showMessage(`Error uploading image: ${error.message}`); 
+                        setIsCompressing(false);
+                        return; 
+                    }
+                    setPaymentSettings(paymentSettings.map(m => m.id === methodId ? data : m));
+                    showMessage('QR Code/Image uploaded successfully!');
+                    setIsCompressing(false);
+                } catch (err) {
+                    console.error('Compression error:', err);
+                    showMessage('Error processing image');
+                    setIsCompressing(false);
+                }
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const removeQRImage = async (methodId) => {
+            if (window.confirm('Remove this QR code image?')) {
+                const { error } = await supabase.from('payment_settings').update({ qr_url: null }).eq('id', methodId);
+                if (error) { console.error(error); showMessage(`Error removing image: ${error.message}`); return; }
+                setPaymentSettings(paymentSettings.map(m => m.id === methodId ? { ...m, qr_url: null } : m));
+                showMessage('QR code removed.');
+            }
         };
 
         const handleAddMethod = async (e) => {
@@ -711,11 +709,67 @@ const AdminDashboard = () => {
                             <h3 style={{ margin: 0 }}>Add New Payment Method</h3>
                             <button onClick={() => setShowAddMethod(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
                         </div>
-                        <form onSubmit={handleAddMethod} style={{ display: 'grid', gap: '15px' }}>
+                        <form 
+                            onSubmit={async (e) => {
+                                e.preventDefault();
+                                const formData = new FormData(e.target);
+                                const fileInput = e.target.querySelector('input[type="file"]');
+                                const file = fileInput.files[0];
+                                
+                                let qr_url = '';
+                                if (file) {
+                                    setIsCompressing(true);
+                                    showMessage('Processing image...');
+                                    qr_url = await new Promise((resolve) => {
+                                        const reader = new FileReader();
+                                        reader.onloadend = async () => {
+                                            const compressed = await compressImage(reader.result, 600, 0.8);
+                                            resolve(compressed);
+                                        };
+                                        reader.readAsDataURL(file);
+                                    });
+                                    setIsCompressing(false);
+                                }
+
+                                const newMethod = {
+                                    name: formData.get('name'),
+                                    account_number: formData.get('accountNumber'),
+                                    account_name: formData.get('accountName'),
+                                    qr_url: qr_url
+                                };
+                                const { data, error } = await supabase.from('payment_settings').insert([newMethod]).select().single();
+                                if (error) { console.error(error); showMessage(`Error adding: ${error.message}`); return; }
+                                setPaymentSettings([...paymentSettings, data]);
+                                setShowAddMethod(false);
+                                showMessage('Payment method added!');
+                            }} 
+                            style={{ display: 'grid', gap: '15px' }}
+                        >
                             <input name="name" placeholder="Method Name (e.g. Bank Transfer, GCash)" required style={inputStyle} />
                             <input name="accountNumber" placeholder="Account Number" required style={inputStyle} />
                             <input name="accountName" placeholder="Account Name" required style={inputStyle} />
-                            <button type="submit" className="btn-primary">Save Method</button>
+                            
+                            <div style={{ display: 'grid', gap: '10px', padding: '15px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                <label style={{ fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-color)' }}>
+                                    <ImageIcon size={18} color='var(--primary)' />
+                                    QR Code/Payment Image (Optional)
+                                </label>
+                                
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    name="qrImage"
+                                    disabled={isCompressing}
+                                    style={{ ...inputStyle, fontSize: '0.85rem' }} 
+                                />
+                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '8px 0 0 0' }}>
+                                    Recommended: PNG/JPG format, Max 5MB. Will be automatically compressed.
+                                </p>
+                            </div>
+
+                            <button type="submit" className="btn-primary" disabled={isCompressing}>
+                                {isCompressing ? 'Processing Image...' : 'Save Method'}
+                            </button>
                         </form>
                     </div>
                 )}
@@ -733,10 +787,42 @@ const AdminDashboard = () => {
                                     <input name="accountNumber" defaultValue={method.account_number} placeholder="Account Number" required style={inputStyle} />
                                     <input name="accountName" defaultValue={method.account_name} placeholder="Account Name" required style={inputStyle} />
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                        <label style={{ fontSize: '0.9rem', fontWeight: 600 }}>QR Code Image (Optional)</label>
-                                        {method.qr_url && <img src={method.qr_url} style={{ width: '100px', height: '100px', borderRadius: '10px', objectFit: 'cover', border: '1px solid #ddd' }} />}
-                                        <input type="file" accept="image/*" onChange={(e) => handleFileUpload(e, method.id)} style={inputStyle} />
+                                    {/* QR Image Upload in Edit Mode */}
+                                    <div style={{ display: 'grid', gap: '10px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                        <label style={{ fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-color)' }}>
+                                            <ImageIcon size={18} color='var(--primary)' />
+                                            QR Code/Payment Image
+                                        </label>
+                                        
+                                        {method.qr_url && (
+                                            <div style={{ position: 'relative', display: 'inline-width', width: '120px' }}>
+                                                <img src={method.qr_url} style={{ width: '120px', height: '120px', borderRadius: '10px', objectFit: 'cover', border: '2px solid #e2e8f0', display: 'block' }} alt="Current QR" />
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => removeQRImage(method.id)} 
+                                                    style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                                                    title="Remove image"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        )}
+                                        
+                                        <div style={{ marginTop: method.qr_url ? '10px' : '0' }}>
+                                            <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>
+                                                {method.qr_url ? 'Update Image' : 'Choose Image'}
+                                            </label>
+                                            <input 
+                                                type="file" 
+                                                accept="image/*" 
+                                                onChange={(e) => handleFileUpload(e, method.id)} 
+                                                disabled={isCompressing}
+                                                style={{ ...inputStyle, fontSize: '0.85rem' }} 
+                                            />
+                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '8px 0 0 0' }}>
+                                                Recommended: PNG/JPG format, Max 5MB. Will be automatically compressed.
+                                            </p>
+                                        </div>
                                     </div>
 
                                     <button type="submit" className="btn-primary">Save Changes</button>
@@ -761,11 +847,59 @@ const AdminDashboard = () => {
                                             <button onClick={() => deleteMethod(method.id)} style={{ color: '#ef4444', border: 'none', background: 'none', cursor: 'pointer' }}><Trash2 size={20} /></button>
                                         </div>
                                     </div>
-                                    {method.qr_url && (
-                                        <div style={{ marginTop: '15px' }}>
-                                            <img src={method.qr_url} style={{ width: '150px', height: '150px', borderRadius: '12px', objectFit: 'cover', border: '1px solid #e2e8f0' }} alt="QR Code" />
-                                        </div>
-                                    )}
+
+                                    {/* QR Code/Image Section */}
+                                    <div style={{ marginTop: '15px', padding: '20px', background: '#ffffff', border: '2px dashed #cbd5e1', borderRadius: '12px' }}>
+                                        {method.qr_url ? (
+                                            <div>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                                    <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-color)' }}>QR Code/Payment Image</h4>
+                                                    <button 
+                                                        onClick={() => removeQRImage(method.id)} 
+                                                        style={{ border: 'none', background: '#fee2e2', color: '#ef4444', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '5px' }}
+                                                        title="Remove image"
+                                                    >
+                                                        <Trash2 size={14} /> Remove
+                                                    </button>
+                                                </div>
+                                                <img src={method.qr_url} style={{ width: '180px', height: '180px', borderRadius: '12px', objectFit: 'cover', border: '2px solid #e2e8f0', display: 'block', margin: '0 auto 15px' }} alt="QR Code" />
+                                                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: 600 }}>Update Image</label>
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*" 
+                                                    onChange={(e) => handleFileUpload(e, method.id)} 
+                                                    disabled={isCompressing}
+                                                    style={{ ...inputStyle, fontSize: '0.85rem', color: isCompressing ? 'var(--text-muted)' : 'var(--text-color)' }} 
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                                                <div style={{ background: '#eff6ff', width: '60px', height: '60px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 15px' }}>
+                                                    <ImageIcon size={32} color='var(--primary)' />
+                                                </div>
+                                                <h4 style={{ margin: '0 0 5px 0', fontWeight: 600, color: 'var(--text-color)' }}>Add QR Code/Payment Image</h4>
+                                                <p style={{ margin: '0 0 15px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Upload a QR code or payment screenshot</p>
+                                                <label style={{ display: 'inline-block' }}>
+                                                    <input 
+                                                        type="file" 
+                                                        accept="image/*" 
+                                                        onChange={(e) => handleFileUpload(e, method.id)} 
+                                                        disabled={isCompressing}
+                                                        style={{ display: 'none' }} 
+                                                    />
+                                                    <button 
+                                                        type="button"
+                                                        onClick={(e) => e.currentTarget.parentElement.querySelector('input').click()}
+                                                        disabled={isCompressing}
+                                                        className="btn-primary" 
+                                                        style={{ padding: '10px 20px', borderRadius: '8px', cursor: isCompressing ? 'not-allowed' : 'pointer', opacity: isCompressing ? 0.6 : 1 }}
+                                                    >
+                                                        {isCompressing ? 'Uploading...' : 'Choose Image'}
+                                                    </button>
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -951,32 +1085,214 @@ const AdminDashboard = () => {
 
 
 
-    // --- MAIN RENDER ---
-    return (
-        <div className="admin-layout" style={{ display: 'flex', minHeight: '100vh', background: '#f1f5f9', fontFamily: 'Inter' }}>
-            {/* Sidebar */}
-            <aside style={{ width: '260px', background: 'var(--primary)', color: 'white', padding: '30px 20px', position: 'fixed', height: '100vh' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '50px', paddingLeft: '10px' }}>
-                    <Package size={28} color="var(--accent)" />
-                    <span style={{ fontSize: '1.4rem', fontWeight: 700, fontFamily: 'Playfair Display' }}>Fiesta Kainan sa Cubao</span>
+    // --- COMPONENT: DELIVERY COVERAGE MANAGER ---
+    const DeliveryCoverageManager = () => {
+        const [showAddForm, setShowAddForm] = useState(false);
+        const [editingId, setEditingId] = useState(null);
+
+        const handleSave = async (e, id = null) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const payload = {
+                barangay_name: formData.get('barangayName'),
+                delivery_fee: Number(formData.get('deliveryFee')),
+                status: formData.get('status')
+            };
+
+            if (payload.delivery_fee < 0) {
+                showMessage('Error: Delivery fee cannot be negative.');
+                return;
+            }
+
+            try {
+                let savedData;
+                if (id) {
+                    const { data, error } = await supabase.from('delivery_barangays').update(payload).eq('id', id).select().single();
+                    if (error) throw error;
+                    savedData = data;
+                    setDeliveryBarangays(deliveryBarangays.map(b => b.id === id ? savedData : b));
+                    setEditingId(null);
+                    showMessage('Barangay updated successfully!');
+                } else {
+                    const { data, error } = await supabase.from('delivery_barangays').insert([payload]).select().single();
+                    if (error) throw error;
+                    savedData = data;
+                    setDeliveryBarangays([...deliveryBarangays, savedData].sort((a, b) => a.barangay_name.localeCompare(b.barangay_name)));
+                    setShowAddForm(false);
+                    showMessage('Barangay added successfully!');
+                }
+            } catch (err) {
+                console.error(err);
+                if (err.code === '23505') {
+                    showMessage('Error: Barangay name must be unique.');
+                } else {
+                    showMessage(`Error: ${err.message}`);
+                }
+            }
+        };
+
+        const toggleStatus = async (barangay) => {
+            const newStatus = barangay.status === 'Active' ? 'Inactive' : 'Active';
+            try {
+                const { error } = await supabase.from('delivery_barangays').update({ status: newStatus }).eq('id', barangay.id);
+                if (error) throw error;
+                setDeliveryBarangays(deliveryBarangays.map(b => b.id === barangay.id ? { ...b, status: newStatus } : b));
+                showMessage(`Barangay marked as ${newStatus}.`);
+            } catch (err) {
+                console.error(err);
+                showMessage(`Error updating status: ${err.message}`);
+            }
+        };
+
+        const deleteBarangay = async (id) => {
+            if (window.confirm('Delete this barangay? This will remove it from the delivery options.')) {
+                try {
+                    const { error } = await supabase.from('delivery_barangays').delete().eq('id', id);
+                    if (error) throw error;
+                    setDeliveryBarangays(deliveryBarangays.filter(b => b.id !== id));
+                    showMessage('Barangay deleted.');
+                } catch (err) {
+                    console.error(err);
+                    showMessage(`Error deleting: ${err.message}`);
+                }
+            }
+        };
+
+        return (
+            <div className="admin-card" style={{ background: 'white', padding: '30px', borderRadius: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
+                    <h2 style={{ margin: 0 }}>Delivery Coverage Management</h2>
+                    <button onClick={() => setShowAddForm(true)} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', borderRadius: '12px' }}>
+                        <Plus size={18} /> Add Barangay
+                    </button>
                 </div>
 
-                <nav style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                {showAddForm && (
+                    <div style={{ background: '#f8fafc', padding: '25px', borderRadius: '15px', border: '1px solid #e2e8f0', marginBottom: '30px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+                            <h3 style={{ margin: 0 }}>Add New Barangay</h3>
+                            <button onClick={() => setShowAddForm(false)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
+                        </div>
+                        <form onSubmit={(e) => handleSave(e)} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', alignItems: 'end' }}>
+                            <div>
+                                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '8px' }}>Barangay Name *</label>
+                                <input name="barangayName" placeholder="e.g. Poblacion" required style={inputStyle} />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '8px' }}>Delivery Fee (₱) *</label>
+                                <input type="number" name="deliveryFee" placeholder="0.00" min="0" step="0.01" required style={inputStyle} />
+                            </div>
+                            <div>
+                                <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '8px' }}>Status</label>
+                                <select name="status" defaultValue="Active" style={inputStyle}>
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select>
+                            </div>
+                            <div style={{ gridColumn: 'span 3', display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                                <button type="submit" className="btn-primary" style={{ padding: '10px 30px' }}>Save</button>
+                            </div>
+                        </form>
+                    </div>
+                )}
+
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 10px' }}>
+                        <thead>
+                            <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}>
+                                <th style={{ padding: '10px' }}>Barangay</th>
+                                <th style={{ padding: '10px' }}>Delivery Fee</th>
+                                <th style={{ padding: '10px' }}>Status</th>
+                                <th style={{ padding: '10px' }}>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {deliveryBarangays.length === 0 ? (
+                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No barangays added yet.</td></tr>
+                            ) : deliveryBarangays.map(b => (
+                                <tr key={b.id} style={{ background: '#f8fafc' }}>
+                                    {editingId === b.id ? (
+                                        <td colSpan="4" style={{ padding: '15px', borderRadius: '12px' }}>
+                                            <form onSubmit={(e) => handleSave(e, b.id)} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto auto', gap: '10px', alignItems: 'center' }}>
+                                                <input name="barangayName" defaultValue={b.barangay_name} required style={inputStyle} />
+                                                <input type="number" name="deliveryFee" defaultValue={b.delivery_fee} min="0" step="0.01" required style={inputStyle} />
+                                                <select name="status" defaultValue={b.status} style={inputStyle}>
+                                                    <option value="Active">Active</option>
+                                                    <option value="Inactive">Inactive</option>
+                                                </select>
+                                                <button type="submit" className="btn-primary" style={{ padding: '12px 20px' }}>Save</button>
+                                                <button type="button" onClick={() => setEditingId(null)} style={{ padding: '12px 20px', border: '1px solid #cbd5e1', background: 'white', borderRadius: '10px', cursor: 'pointer' }}>Cancel</button>
+                                            </form>
+                                        </td>
+                                    ) : (
+                                        <>
+                                            <td style={{ padding: '15px', borderTopLeftRadius: '12px', borderBottomLeftRadius: '12px', fontWeight: 600 }}>
+                                                {b.barangay_name}
+                                            </td>
+                                            <td style={{ padding: '15px', fontWeight: 700, color: 'var(--primary)' }}>
+                                                ₱{b.delivery_fee}
+                                            </td>
+                                            <td style={{ padding: '15px' }}>
+                                                <span style={{ 
+                                                    padding: '5px 12px', 
+                                                    borderRadius: '20px', 
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 700,
+                                                    background: b.status === 'Active' ? '#dcfce7' : '#fee2e2',
+                                                    color: b.status === 'Active' ? '#166534' : '#991b1b'
+                                                }}>
+                                                    {b.status}
+                                                </span>
+                                            </td>
+                                            <td style={{ padding: '15px', borderTopRightRadius: '12px', borderBottomRightRadius: '12px' }}>
+                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                    <button onClick={() => toggleStatus(b)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)' }} title={b.status === 'Active' ? 'Deactivate' : 'Activate'}>
+                                                        {b.status === 'Active' ? <X size={18} /> : <Save size={18} />}
+                                                    </button>
+                                                    <button onClick={() => setEditingId(b.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--primary)' }} title="Edit"><Edit2 size={18} /></button>
+                                                    <button onClick={() => deleteBarangay(b.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#ef4444' }} title="Delete"><Trash2 size={18} /></button>
+                                                </div>
+                                            </td>
+                                        </>
+                                    )}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    };
+
+
+
+    // --- MAIN RENDER ---
+    return (
+        <div className="admin-layout">
+            {/* Sidebar */}
+            <aside className="admin-sidebar">
+                <div className="admin-sidebar-brand">
+                    <img src={storeSettings.logo_url || '/logo.png'} alt={storeSettings.store_name} className="admin-sidebar-logo" />
+                    <span className="admin-sidebar-title">{storeSettings.store_name || 'Admin Portal'}</span>
+                </div>
+
+                <nav className="admin-sidebar-nav">
                     <SidebarItem icon={<List size={20} />} label="Menu Items" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
                     <SidebarItem icon={<Tag size={20} />} label="Categories" active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} />
                     <SidebarItem icon={<ShoppingBag size={20} />} label="Orders" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
                     <SidebarItem icon={<Settings size={20} />} label="Order Types" active={activeTab === 'orderTypes'} onClick={() => setActiveTab('orderTypes')} />
+                    <SidebarItem icon={<MapPin size={20} />} label="Delivery Coverage" active={activeTab === 'delivery'} onClick={() => setActiveTab('delivery')} />
                     <SidebarItem icon={<CreditCard size={20} />} label="Payment Methods" active={activeTab === 'payment'} onClick={() => setActiveTab('payment')} />
                     <SidebarItem icon={<LayoutDashboard size={20} />} label="General Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
                 </nav>
 
-                <button onClick={handleLogout} style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', padding: '12px', width: '100%', borderRadius: '10px', cursor: 'pointer', position: 'absolute', bottom: '30px', left: '20px', width: 'calc(100% - 40px)' }}>
+                <button onClick={handleLogout} className="admin-sidebar-logout">
                     <LogOut size={20} /> Sign Out
                 </button>
             </aside>
 
             {/* Main Content */}
-            <main style={{ marginLeft: '260px', flex: 1, padding: '40px', maxWidth: '1200px' }}>
+            <main className="admin-main-content">
                 {message && (
                     <div style={{
                         position: 'fixed',
@@ -1011,6 +1327,7 @@ const AdminDashboard = () => {
                 {activeTab === 'categories' && <CategoryManager />}
                 {activeTab === 'orders' && <OrderHistory />}
                 {activeTab === 'orderTypes' && <OrderTypeManager />}
+                {activeTab === 'delivery' && <DeliveryCoverageManager />}
                 {activeTab === 'payment' && <PaymentSettings />}
                 {activeTab === 'settings' && (
                     <StoreGeneralSettings
@@ -1036,7 +1353,8 @@ const StoreGeneralSettings = ({ storeSettings, setStoreSettings, showMessage, co
             contact: formData.get('contact'),
             open_time: formData.get('openTime'),
             close_time: formData.get('closeTime'),
-            manual_status: formData.get('manualStatus')
+            manual_status: formData.get('manualStatus'),
+            facebook_messenger_link: formData.get('facebookMessengerLink')
         };
 
         const payload = storeSettings.id ? { id: storeSettings.id, ...updateData } : updateData;
@@ -1160,38 +1478,13 @@ const StoreGeneralSettings = ({ storeSettings, setStoreSettings, showMessage, co
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '30px' }}>
                     <div>
                         <h3 style={{ fontSize: '1.1rem', marginBottom: '20px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Clock size={20} /> Store Availability
-                        </h3>
-                        <div style={{ display: 'grid', gap: '15px' }}>
-                            <div>
-                                <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: 600 }}>Manual Status Toggle</label>
-                                <select name="manualStatus" defaultValue={storeSettings.manual_status} style={inputStyle}>
-                                    <option value="auto">Auto (Based on Hours)</option>
-                                    <option value="open">Always Open</option>
-                                    <option value="closed">Always Closed</option>
-                                </select>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: 600 }}>Opening Time</label>
-                                    <input name="openTime" type="time" defaultValue={storeSettings.open_time} style={inputStyle} />
-                                </div>
-                                <div>
-                                    <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: 600 }}>Closing Time</label>
-                                    <input name="closeTime" type="time" defaultValue={storeSettings.close_time} style={inputStyle} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 style={{ fontSize: '1.1rem', marginBottom: '20px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <FileText size={20} /> Store Information
                         </h3>
                         <div style={{ display: 'grid', gap: '15px' }}>
                             <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: 600 }}>Store Name</label><input name="storeName" defaultValue={storeSettings.store_name} style={inputStyle} /></div>
                             <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: 600 }}>Address</label><input name="address" defaultValue={storeSettings.address} style={inputStyle} /></div>
                             <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: 600 }}>Contact Number</label><input name="contact" defaultValue={storeSettings.contact} style={inputStyle} /></div>
+                            <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '8px', fontWeight: 600 }}>Facebook Messenger Page ID</label><input name="facebookMessengerLink" placeholder="e.g. 61579032505526" defaultValue={storeSettings.facebook_messenger_link} style={inputStyle} /><p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Your Facebook page ID or messenger link for order notifications</p></div>
                         </div>
                     </div>
 
@@ -1204,79 +1497,6 @@ const StoreGeneralSettings = ({ storeSettings, setStoreSettings, showMessage, co
                             <input type="file" accept="image/*" onChange={handleLogoUpload} style={inputStyle} />
                         </div>
                     </div>
-
-                    <div style={{ gridColumn: '1 / -1' }}>
-                        <h3 style={{ fontSize: '1.1rem', marginBottom: '20px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <ImageIcon size={20} /> Hero Slideshow Banners
-                        </h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-                            {(storeSettings.banner_images || []).map((url, i) => (
-                                <div key={i} style={{ position: 'relative', overflow: 'hidden', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow)' }}>
-                                    <img src={url} style={{ width: '100%', height: '140px', objectFit: 'cover' }} alt={`Banner ${i}`} />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeBanner(i)}
-                                        style={{
-                                            position: 'absolute',
-                                            top: '10px',
-                                            right: '10px',
-                                            background: 'rgba(239, 68, 68, 0.9)',
-                                            color: 'white',
-                                            border: 'none',
-                                            borderRadius: '50%',
-                                            width: '32px',
-                                            height: '32px',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                            transition: 'all 0.2s'
-                                        }}
-                                        onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
-                                        onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                    >
-                                        <X size={18} />
-                                    </button>
-                                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.5)', color: 'white', padding: '5px 10px', fontSize: '0.7rem', textAlign: 'center' }}>
-                                        Banner {i + 1}
-                                    </div>
-                                </div>
-                            ))}
-                            <label style={{
-                                height: '140px',
-                                border: '3px dashed var(--primary)',
-                                borderRadius: '16px',
-                                background: isUploading ? '#f1f5f9' : '#fff5f5',
-                                color: 'var(--primary)',
-                                cursor: isUploading ? 'not-allowed' : 'pointer',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '10px',
-                                transition: 'all 0.3s',
-                                fontWeight: 700,
-                                opacity: isUploading ? 0.7 : 1
-                            }}
-                                onMouseOver={(e) => { if (!isUploading) { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = 'var(--primary-dark)'; } }}
-                                onMouseOut={(e) => { if (!isUploading) { e.currentTarget.style.background = '#fff5f5'; e.currentTarget.style.borderColor = 'var(--primary)'; } }}
-                            >
-                                {isUploading ? (
-                                    <>
-                                        <div className="spinner" style={{ width: '30px', height: '30px' }}></div>
-                                        <span style={{ fontSize: '0.9rem' }}>Uploading...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <Plus size={32} />
-                                        <span style={{ fontSize: '0.9rem' }}>Add New Banner</span>
-                                        <input type="file" accept="image/*" onChange={handleBannerUpload} style={{ display: 'none' }} />
-                                    </>
-                                )}
-                            </label>
-                        </div>
-                    </div>
                 </div>
                 <button type="submit" className="btn-primary" style={{ marginTop: '40px', width: '100%', padding: '15px' }}>Save All Settings</button>
             </form>
@@ -1285,14 +1505,8 @@ const StoreGeneralSettings = ({ storeSettings, setStoreSettings, showMessage, co
 };
 
 const SidebarItem = ({ icon, label, active, onClick }) => (
-    <button onClick={onClick} style={{
-        display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 15px',
-        background: active ? 'var(--accent)' : 'transparent',
-        color: active ? 'var(--primary)' : 'rgba(255,255,255,0.7)',
-        border: 'none', borderRadius: '10px', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 600,
-        textAlign: 'left', width: '100%', transition: 'all 0.2s'
-    }}>
-        {icon} {label}
+    <button onClick={onClick} className={`admin-sidebar-item ${active ? 'active' : ''}`}>
+        {icon} <span>{label}</span>
     </button>
 );
 

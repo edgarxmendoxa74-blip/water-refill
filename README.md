@@ -1,12 +1,12 @@
-# Fiesta Kainan sa Cubao
+# Water Refill Station
 
-A premium web application for Fiesta Kainan sa Cubao, specializing in authentic Filipino dining and a vibrant community experience.
+A premium web application for a Water Refill Station, specializing in clean, purified water delivery and refill services.
 
 ## Features
-- **Dynamic Menu**: Real-time menu management with categories, variations, and add-ons.
+- **Dynamic Product Catalog**: Real-time product management with categories, sizes, and pricing options.
 - **Store Status**: Automatic and manual toggle for store opening/closing hours.
 - **Order Management**: Checkout integration with Facebook Messenger for seamless ordering.
-- **Admin Dashboard**: Full CRUD for menu items and categories, order history, and store settings.
+- **Admin Dashboard**: Full CRUD for products and categories, order history, and store settings.
 - **Thermal Printing**: Built-in support for 57mm thermal receipts.
 - **Responsive Design**: Fully optimized for mobile and desktop views.
 
@@ -34,7 +34,7 @@ A premium web application for Fiesta Kainan sa Cubao, specializing in authentic 
 
 4. **Admin Access:**
    - Navigate to `/login` to access the administrative dashboard.
-   - Manage store settings, hours, and menu items directly from the panel.
+   - Manage store settings, hours, and products directly from the panel.
 
 ## Credits
-Built with passion for quality in every bite.
+Built with passion for providing clean, safe drinking water.
