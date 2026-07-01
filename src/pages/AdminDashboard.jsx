@@ -911,6 +911,22 @@ const AdminDashboard = () => {
 
     // --- COMPONENT: ORDERS LIST ---
     const OrderHistory = () => {
+        const [orderTypes, setOrderTypes] = useState([]);
+        
+        useEffect(() => {
+            const fetchTypes = async () => {
+                const { data } = await supabase.from('order_types').select('*');
+                if (data) setOrderTypes(data);
+            };
+            fetchTypes();
+        }, []);
+
+        const getOrderTypeName = (typeIdOrName) => {
+            if (!typeIdOrName) return 'N/A';
+            const found = orderTypes.find(t => t.id === typeIdOrName);
+            return found ? found.name : typeIdOrName;
+        };
+
         const stats = orders.reduce((acc, order) => {
             acc.totalOrders++;
             if (order.status !== 'Cancelled') {
@@ -966,7 +982,7 @@ const AdminDashboard = () => {
                         <div>
                             <strong>OR#:</strong> ${order.id.toString().slice(-6).toUpperCase()}<br>
                             <strong>Date:</strong> ${new Date(order.timestamp).toLocaleString()}<br>
-                            <strong>Type:</strong> ${(order.order_type || 'Dine-in').toUpperCase()}<br>
+                            <strong>Type:</strong> ${getOrderTypeName(order.order_type).toUpperCase()}<br>
                             <strong>Cust:</strong> ${order.customer_details?.name}
                             ${order.customer_details?.table_number ? `<br><strong>Table:</strong> ${order.customer_details.table_number}` : ''}
                         </div>
@@ -1024,7 +1040,7 @@ const AdminDashboard = () => {
                             <div key={order.id || idx} style={{ padding: '20px', border: '1px solid #e2e8f0', borderRadius: '15px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
                                     <div>
-                                        <span style={{ fontWeight: 800, color: 'var(--primary)', marginRight: '10px' }}>{(order.order_type || 'N/A').toUpperCase()}</span>
+                                        <span style={{ fontWeight: 800, color: 'var(--primary)', marginRight: '10px' }}>{getOrderTypeName(order.order_type).toUpperCase()}</span>
                                         <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{new Date(order.timestamp).toLocaleString()}</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
