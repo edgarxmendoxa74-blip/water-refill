@@ -491,7 +491,13 @@ ${info}`.trim();
                 </div>
             )}
 
-
+            {/* Store Closed Overlay */}
+            {!isOpen && (
+                <div style={{ background: 'var(--accent)', color: 'white', textAlign: 'center', padding: '12px', position: 'sticky', top: 0, zIndex: 1200, fontWeight: 700, fontSize: '0.9rem' }}>
+                    <Clock size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                    WE ARE CURRENTLY CLOSED. Our operating hours are {formatTime(storeSettings.open_time) || '10:00 AM'} to {formatTime(storeSettings.close_time) || '1:00 AM'}. Orders are disabled.
+                </div>
+            )}
 
             <header className="app-header">
                 <div className="container header-container">
