@@ -83,9 +83,9 @@ const MenuItem = React.memo(({ item, isOpen, openProductSelection }) => (
                 </div>
                 <button
                     className="btn-primary"
-                    disabled={item.out_of_stock || !isOpen}
+                    disabled={item.out_of_stock}
                     onClick={() => openProductSelection(item)}
-                    style={{ padding: '10px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: (item.out_of_stock || !isOpen) ? 0.5 : 1 }}
+                    style={{ padding: '10px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: item.out_of_stock ? 0.5 : 1 }}
                     aria-label="Add to cart"
                 >
                     <Plus size={20} />
