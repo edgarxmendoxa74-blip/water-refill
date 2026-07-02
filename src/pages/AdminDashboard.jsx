@@ -314,11 +314,11 @@ const AdminDashboard = () => {
                 <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 10px' }}>
                         <thead>
-                            <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}><th style={{ padding: '10px' }}>Product</th><th style={{ padding: '10px' }}>Category</th><th style={{ padding: '10px' }}>Price</th><th style={{ padding: '10px' }}>Actions</th></tr>
+                            <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}><th style={{ padding: '10px' }}>Product</th><th style={{ padding: '10px' }}>Category</th><th style={{ padding: '10px' }}>Price</th><th style={{ padding: '10px' }}>Status</th><th style={{ padding: '10px' }}>Actions</th></tr>
                         </thead>
                         <tbody>
                             {filteredItems.length === 0 ? (
-                                <tr><td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No products found matching your criteria.</td></tr>
+                                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No products found matching your criteria.</td></tr>
                             ) : filteredItems.map(item => (
                                 <tr key={item.id} style={{ background: '#f8fafc' }}>
                                     <td style={{ padding: '15px', display: 'flex', alignItems: 'center', gap: '15px', borderTopLeftRadius: '12px', borderBottomLeftRadius: '12px' }}>
@@ -337,6 +337,34 @@ const AdminDashboard = () => {
                                                 <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.85rem' }}>₱{item.price}</span>
                                             </div>
                                         ) : <span style={{ fontWeight: 700 }}>₱{item.price}</span>}
+                                    </td>
+                                    <td style={{ padding: '15px' }}>
+                                        <button
+                                            onClick={async () => {
+                                                const newStatus = !item.out_of_stock;
+                                                setItems(items.map(i => i.id === item.id ? { ...i, out_of_stock: newStatus } : i));
+                                                const { error } = await supabase.from('menu_items').update({ out_of_stock: newStatus }).eq('id', item.id);
+                                                if (error) {
+                                                    console.error(error);
+                                                    showMessage(`Error updating status: ${error.message}`);
+                                                    setItems(items.map(i => i.id === item.id ? { ...i, out_of_stock: !newStatus } : i));
+                                                } else {
+                                                    showMessage(`${item.name} is now ${newStatus ? 'Not Available' : 'Available'}`);
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '5px 12px',
+                                                borderRadius: '20px',
+                                                border: 'none',
+                                                fontSize: '0.78rem',
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                background: item.out_of_stock ? '#fee2e2' : '#dcfce7',
+                                                color: item.out_of_stock ? '#dc2626' : '#16a34a'
+                                            }}
+                                        >
+                                            {item.out_of_stock ? '❌ Not Available' : '✅ Available'}
+                                        </button>
                                     </td>
                                     <td style={{ padding: '15px', borderTopRightRadius: '12px', borderBottomRightRadius: '12px' }}>
                                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -541,7 +569,7 @@ const AdminDashboard = () => {
             // Update DB
             const { error } = await supabase.from('order_types').upsert({
                 id: type.id,
-                name: type.name, // Ensure name is saved (e.g. "Take Out")
+                name: type.name, // Ensure name is saved (e.g. "Pick Up")
                 is_active: newStatus
             });
 

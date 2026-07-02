@@ -60,40 +60,42 @@ const normalizeItems = (items) => {
 };
 
 // Memoized menu item component
-const MenuItem = React.memo(({ item, isOpen, openProductSelection }) => (
-    <div className="menu-item-card" style={{ opacity: item.out_of_stock ? 0.6 : 1 }}>
-        <div style={{ position: 'relative' }}>
-            <img src={item.image} alt={item.name} className="menu-item-image" loading="lazy" />
-            {item.promo_price && <span style={{ position: 'absolute', top: '10px', left: '10px', background: '#ef4444', color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 800 }}>PROMO</span>}
-            {item.out_of_stock && <span style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, borderRadius: '20px' }}>OUT OF STOCK</span>}
-        </div>
-        <div className="menu-item-info">
-            <h3 className="menu-item-name">{item.name}</h3>
-            <p className="menu-item-desc">{item.description}</p>
-            <div className="menu-item-footer">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {item.promo_price ? (
-                        <>
-                            <span className="menu-item-price" style={{ color: '#ef4444' }}>₱{item.promo_price}</span>
-                            <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.85rem' }}>₱{item.price}</span>
-                        </>
-                    ) : (
-                        <span className="menu-item-price">₱{item.price}</span>
-                    )}
+const MenuItem = React.memo(({ item, openProductSelection }) => {
+    return (
+        <div className="menu-item-card" style={{ opacity: item.out_of_stock ? 0.6 : 1 }}>
+            <div style={{ position: 'relative' }}>
+                <img src={item.image} alt={item.name} className="menu-item-image" loading="lazy" />
+                {item.promo_price && <span style={{ position: 'absolute', top: '10px', left: '10px', background: '#ef4444', color: 'white', padding: '4px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 800 }}>PROMO</span>}
+                {item.out_of_stock && <span style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, borderRadius: '20px' }}>OUT OF STOCK</span>}
+            </div>
+            <div className="menu-item-info">
+                <h3 className="menu-item-name">{item.name}</h3>
+                <p className="menu-item-desc">{item.description}</p>
+                <div className="menu-item-footer">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {item.promo_price ? (
+                            <>
+                                <span className="menu-item-price" style={{ color: '#ef4444' }}>₱{item.promo_price}</span>
+                                <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.85rem' }}>₱{item.price}</span>
+                            </>
+                        ) : (
+                            <span className="menu-item-price">₱{item.price}</span>
+                        )}
+                    </div>
+                    <button
+                        className="btn-primary"
+                        disabled={item.out_of_stock}
+                        onClick={() => openProductSelection(item)}
+                        style={{ padding: '10px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: item.out_of_stock ? 0.5 : 1 }}
+                        aria-label="Add to cart"
+                    >
+                        <Plus size={20} />
+                    </button>
                 </div>
-                <button
-                    className="btn-primary"
-                    disabled={item.out_of_stock}
-                    onClick={() => openProductSelection(item)}
-                    style={{ padding: '10px', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: item.out_of_stock ? 0.5 : 1 }}
-                    aria-label="Add to cart"
-                >
-                    <Plus size={20} />
-                </button>
             </div>
         </div>
-    </div>
-));
+    );
+});
 
 const Home = () => {
     const [cartItems, setCartItems] = useState([]);
@@ -262,6 +264,7 @@ const Home = () => {
     const [selectionOptions, setSelectionOptions] = useState({
         variation: null
     });
+    const [modalQty, setModalQty] = useState(1);
 
     // Order type and payment state
     const [orderType, setOrderType] = useState('delivery');
@@ -282,9 +285,10 @@ const Home = () => {
         setSelectionOptions({
             variation: firstVariation || null
         });
+        setModalQty(1);
     }, []);
 
-    const addToCart = (item, options) => {
+    const addToCart = (item, options, qty = 1) => {
         const cartItemId = `${item.id}-${options.variation?.name || ''}`;
         const existing = cartItems.find(i => i.cartItemId === cartItemId);
 
@@ -300,14 +304,14 @@ const Home = () => {
         const finalPrice = price;
 
         if (existing) {
-            setCartItems(cartItems.map(i => i.cartItemId === cartItemId ? { ...i, quantity: i.quantity + 1 } : i));
+            setCartItems(cartItems.map(i => i.cartItemId === cartItemId ? { ...i, quantity: i.quantity + qty } : i));
         } else {
             setCartItems([...cartItems, {
                 ...item,
                 cartItemId,
                 selectedVariation: options.variation,
                 finalPrice,
-                quantity: 1
+                quantity: qty
             }]);
         }
         setSelectedProduct(null);
@@ -585,7 +589,6 @@ ${info}`.trim();
                                     <MenuItem
                                         key={item.id}
                                         item={item}
-                                        isOpen={isOpen}
                                         openProductSelection={openProductSelection}
                                     />
                                 ))}
@@ -630,13 +633,37 @@ ${info}`.trim();
                         )}
 
 
-                        <button className="btn-primary" style={{ width: '100%', padding: '15px', fontWeight: 700, fontSize: '1.1rem' }} onClick={() => addToCart(selectedProduct, selectionOptions)}>
-                            Add to Cart - ₱{(
-                                (selectionOptions.variation && Number(selectionOptions.variation.price) > 0)
+                        {/* Quantity Selector */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', padding: '14px 20px', background: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+                            <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Quantity</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setModalQty(q => Math.max(1, q - 1))}
+                                    style={{ width: '34px', height: '34px', borderRadius: '50%', border: '2px solid var(--primary)', background: 'white', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 700 }}
+                                    aria-label="Decrease quantity"
+                                >
+                                    <Minus size={16} />
+                                </button>
+                                <span style={{ fontWeight: 800, fontSize: '1.2rem', minWidth: '20px', textAlign: 'center' }}>{modalQty}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setModalQty(q => q + 1)}
+                                    style={{ width: '34px', height: '34px', borderRadius: '50%', border: '2px solid var(--primary)', background: 'white', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 700 }}
+                                    aria-label="Increase quantity"
+                                >
+                                    <Plus size={16} />
+                                </button>
+                            </div>
+                        </div>
+
+                        <button className="btn-primary" style={{ width: '100%', padding: '15px', fontWeight: 700, fontSize: '1.1rem' }} onClick={() => addToCart(selectedProduct, selectionOptions, modalQty)}>
+                            Add {modalQty > 1 ? `${modalQty}x ` : ''}to Cart - ₱{(
+                                ((selectionOptions.variation && Number(selectionOptions.variation.price) > 0)
                                     ? (selectedProduct.name?.toLowerCase().includes('pork ribs')
                                         ? Number(selectedProduct.promo_price || selectedProduct.price) + Number(selectionOptions.variation.price)
                                         : Number(selectionOptions.variation.price))
-                                    : Number(selectedProduct.promo_price || selectedProduct.price)
+                                    : Number(selectedProduct.promo_price || selectedProduct.price)) * modalQty
                             )}
                         </button>
                     </div>
@@ -747,9 +774,15 @@ ${info}`.trim();
                                     <div style={{ marginBottom: '30px' }}>
                                         <label style={{ fontWeight: 700, fontSize: '1rem', display: 'block', marginBottom: '15px' }}>Select Order Type</label>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '10px' }}>
-                                            {orderTypes.filter(t => t.id !== 'dine-in' && !t.name.toLowerCase().includes('dine')).map(type => (
-                                                <button key={type.id} onClick={() => setOrderType(type.id)} style={{ padding: '8px', fontSize: '0.9rem', borderRadius: '12px', border: '1px solid var(--primary)', background: orderType === type.id ? 'var(--primary)' : 'white', color: orderType === type.id ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer' }}>{type.name}</button>
-                                            ))}
+                                            {orderTypes.filter(t => t.id !== 'dine-in' && !t.name.toLowerCase().includes('dine')).map(type => {
+                                                const displayName = type.name.toLowerCase().includes('take') ? 'Pick Up' : type.name;
+                                                const emoji = (type.id === 'delivery' || type.name.toLowerCase().includes('delivery')) ? '🏍️' : '🛍️';
+                                                return (
+                                                    <button key={type.id} onClick={() => setOrderType(type.id)} style={{ padding: '12px 8px', fontSize: '0.9rem', borderRadius: '12px', border: '1px solid var(--primary)', background: orderType === type.id ? 'var(--primary)' : 'white', color: orderType === type.id ? 'white' : 'var(--primary)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                                        <span style={{ fontSize: '1.1rem' }}>{emoji}</span> {displayName}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
 
@@ -833,20 +866,15 @@ ${info}`.trim();
                             <div key={item.cartItemId} style={{ display: 'flex', gap: '15px', marginBottom: '20px', alignItems: 'flex-start' }}>
                                 <img src={item.image} alt={item.name} style={{ width: '60px', height: '60px', borderRadius: '8px', objectFit: 'cover' }} />
                                 <div style={{ flex: 1 }}>
-                                    <h4 style={{ margin: 0 }}>{item.name}</h4>
+                                    <h4 style={{ margin: 0 }}>{item.name} {item.quantity > 1 && <span style={{ color: 'var(--primary)', fontWeight: 800 }}>x{item.quantity}</span>}</h4>
                                     {item.selectedVariation && (
                                         <p style={{ margin: '2px 0 5px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                                             {item.selectedVariation.name}
                                         </p>
                                     )}
-                                    <span style={{ fontWeight: 700 }}>₱{item.finalPrice}</span>
+                                    <span style={{ fontWeight: 700 }}>₱{item.finalPrice * item.quantity}</span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                    <button onClick={() => removeFromCart(item.cartItemId)} style={{ border: '1px solid var(--border)', background: 'none', padding: '2px', borderRadius: '4px' }}><Minus size={14} /></button>
-                                    <span>{item.quantity}</span>
-                                    <button onClick={() => addToCart(item, { variation: item.selectedVariation })} style={{ border: '1px solid var(--border)', background: 'none', padding: '2px', borderRadius: '4px' }}><Plus size={14} /></button>
-                                    <button onClick={() => deleteFromCart(item.cartItemId)} style={{ marginLeft: '5px', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}><Trash2 size={16} /></button>
-                                </div>
+                                <button onClick={() => deleteFromCart(item.cartItemId)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}><Trash2 size={16} /></button>
                             </div>
                         ))}
                     </div>
