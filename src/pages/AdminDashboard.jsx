@@ -1385,8 +1385,20 @@ const AdminDashboard = () => {
 
         // --- ORDER TYPE BREAKDOWN ---
         const typeBreakdown = filteredOrders.reduce((acc, o) => {
-            const t = (o.order_type || 'unknown').toLowerCase();
-            const label = t.includes('delivery') ? 'Delivery' : t.includes('pickup') || t.includes('pick') ? 'Pick Up' : t;
+            let label = 'Unknown';
+            const orderTypeValue = (o.order_type || '').toLowerCase();
+            
+            // Check if it's a UUID (looks like a UUID pattern)
+            if (orderTypeValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                // Find the order type name from the orderTypes array
+                const orderTypeObj = orderTypes.find(ot => ot.id === o.order_type);
+                label = orderTypeObj ? orderTypeObj.name : 'Unknown';
+            } else {
+                // Legacy format: check if it contains delivery or pickup keywords
+                const t = orderTypeValue;
+                label = t.includes('delivery') ? 'Delivery' : t.includes('pickup') || t.includes('pick') ? 'Pick Up' : (t || 'Unknown');
+            }
+            
             acc[label] = (acc[label] || 0) + 1;
             return acc;
         }, {});
