@@ -402,7 +402,6 @@ const Home = () => {
             let info = `${isDeliveryType(orderType) ? 'Designated Name' : 'Name'}: ${customerDetails.name}`;
             if (isPickupType(orderType)) {
                 info += ` | Phone: ${customerDetails.phone} | Pickup Time: ${customerDetails.pickup_time}`;
-                if (customerDetails.preferred_time) info += ` | Preferred Time: ${customerDetails.preferred_time}`;
             }
             if (isDeliveryType(orderType)) {
                 info += ` | Phone: ${customerDetails.phone} | Address: ${customerDetails.address}`;
@@ -792,10 +791,6 @@ ${info}`.trim();
                                                         <div>
                                                             <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Pickup Time</label>
                                                             <input type="time" value={customerDetails.pickup_time} onChange={(e) => setCustomerDetails({ ...customerDetails, pickup_time: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} />
-                                                        </div>
-                                                        <div>
-                                                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Preferred Time <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
-                                                            <input type="text" value={customerDetails.preferred_time} onChange={(e) => setCustomerDetails({ ...customerDetails, preferred_time: e.target.value })} placeholder="e.g. Morning, Afternoon, 2:00 PM" style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} />
                                                         </div>
                                                     </>
                                                 )}
