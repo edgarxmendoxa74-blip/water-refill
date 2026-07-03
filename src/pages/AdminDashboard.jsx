@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import {
@@ -26,7 +26,15 @@ import {
     FileText,
     Camera,
     Utensils,
-    Truck
+    Truck,
+    BarChart2,
+    TrendingUp,
+    TrendingDown,
+    ArrowUpRight,
+    Users,
+    Download,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 import { categories as initialCategories, menuItems as initialItems } from '../data/MenuData';
 
@@ -34,7 +42,7 @@ const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', borde
 
 const AdminDashboard = () => {
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState('menu'); // menu, categories, orders, payment, orderTypes
+    const [activeTab, setActiveTab] = useState('analytics'); // analytics, menu, categories, orders, payment, orderTypes
     const [message, setMessage] = useState('');
 
     // --- STATE MANAGEMENT ---
@@ -1310,6 +1318,462 @@ const AdminDashboard = () => {
 
 
 
+    // --- COMPONENT: ANALYTICS DASHBOARD ---
+    const AnalyticsDashboard = () => {
+        const [dateRange, setDateRange] = useState('7days');
+
+        const now = new Date();
+        const getStartDate = () => {
+            if (dateRange === 'today') {
+                const d = new Date(now); d.setHours(0,0,0,0); return d;
+            }
+            if (dateRange === '7days') {
+                const d = new Date(now); d.setDate(d.getDate() - 7); return d;
+            }
+            if (dateRange === '30days') {
+                const d = new Date(now); d.setDate(d.getDate() - 30); return d;
+            }
+            return new Date(0); // all time
+        };
+
+        const startDate = getStartDate();
+        const filteredOrders = orders.filter(o => {
+            const ts = o.timestamp || o.created_at;
+            if (!ts) return true;
+            return new Date(ts) >= startDate;
+        });
+
+        // --- KPIs ---
+        const totalRevenue = filteredOrders
+            .filter(o => o.status !== 'Cancelled')
+            .reduce((s, o) => s + Number(o.total_amount || 0), 0);
+        const totalOrders = filteredOrders.length;
+        const completedOrders = filteredOrders.filter(o => o.status === 'Completed').length;
+        const pendingOrders = filteredOrders.filter(o => o.status === 'Pending' || !o.status).length;
+        const cancelledOrders = filteredOrders.filter(o => o.status === 'Cancelled').length;
+        const avgOrderValue = totalOrders > 0 ? (totalRevenue / Math.max(completedOrders || totalOrders, 1)).toFixed(0) : 0;
+        const completionRate = totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(0) : 0;
+
+        // --- REVENUE BY DAY (last 7 or 30 days) ---
+        const days = dateRange === 'today' ? 1 : dateRange === '7days' ? 7 : dateRange === '30days' ? 30 : null;
+        const dailyRevenue = (() => {
+            if (!days) return [];
+            const map = {};
+            const dateMap = {}; // Store full date info
+            for (let i = days - 1; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                const month = d.toLocaleDateString('en-PH', { month: 'short' });
+                const day = d.getDate();
+                const key = `${month} ${day}`;
+                map[key] = 0;
+                dateMap[key] = { month, day };
+            }
+            filteredOrders.filter(o => o.status !== 'Cancelled').forEach(o => {
+                const ts = o.timestamp || o.created_at;
+                if (!ts) return;
+                const d = new Date(ts);
+                const month = d.toLocaleDateString('en-PH', { month: 'short' });
+                const day = d.getDate();
+                const key = `${month} ${day}`;
+                if (map[key] !== undefined) map[key] += Number(o.total_amount || 0);
+            });
+            return Object.entries(map).map(([k, v]) => [k, v, dateMap[k]]);
+        })();
+
+        const maxRevDay = Math.max(...dailyRevenue.map(([,v]) => v), 1);
+
+        // --- ORDER TYPE BREAKDOWN ---
+        const typeBreakdown = filteredOrders.reduce((acc, o) => {
+            const t = (o.order_type || 'unknown').toLowerCase();
+            const label = t.includes('delivery') ? 'Delivery' : t.includes('pickup') || t.includes('pick') ? 'Pick Up' : t;
+            acc[label] = (acc[label] || 0) + 1;
+            return acc;
+        }, {});
+        const typeTotal = Object.values(typeBreakdown).reduce((s, v) => s + v, 0) || 1;
+        const typeColors = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6'];
+
+        // --- TOP PRODUCTS ---
+        const productCount = {};
+        filteredOrders.forEach(o => {
+            (o.items || []).forEach(item => {
+                const name = item.split(' (x')[0].trim();
+                productCount[name] = (productCount[name] || 0) + (parseInt(item.match(/\(x(\d+)\)/)?.[1]) || 1);
+            });
+        });
+        const topProducts = Object.entries(productCount)
+            .sort(([,a],[,b]) => b - a)
+            .slice(0, 5);
+        const maxProd = Math.max(...topProducts.map(([,v]) => v), 1);
+
+        // --- PAYMENT METHOD BREAKDOWN ---
+        const payBreakdown = filteredOrders.reduce((acc, o) => {
+            const pm = o.payment_method === 'Cash/COD' ? 'Cash/COD' : (o.payment_method || 'Unknown');
+            acc[pm] = (acc[pm] || 0) + 1;
+            return acc;
+        }, {});
+
+        const cardStyle = (bg, border) => ({
+            background: bg, padding: '20px', borderRadius: '16px', border: `1px solid ${border}`
+        });
+
+        const rangeBtns = [
+            { key: 'today', label: 'Today' },
+            { key: '7days', label: '7 Days' },
+            { key: '30days', label: '30 Days' },
+            { key: 'all', label: 'All Time' }
+        ];
+
+        return (
+            <div style={{ display: 'grid', gap: '24px' }}>
+                {/* Header */}
+                <div style={{ background: 'white', padding: '24px 30px', borderRadius: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '15px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+                    <div>
+                        <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>Analytics Overview</h2>
+                        <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>Track your store performance</p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', background: '#f1f5f9', padding: '6px', borderRadius: '12px' }}>
+                        {rangeBtns.map(btn => (
+                            <button
+                                key={btn.key}
+                                onClick={() => setDateRange(btn.key)}
+                                style={{
+                                    padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+                                    fontWeight: 700, fontSize: '0.85rem', transition: 'all 0.2s',
+                                    background: dateRange === btn.key ? 'var(--primary)' : 'transparent',
+                                    color: dateRange === btn.key ? 'white' : 'var(--text-muted)'
+                                }}
+                            >{btn.label}</button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* KPI Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                    {[
+                        { label: 'Total Revenue', value: `₱${totalRevenue.toLocaleString()}`, sub: 'excl. cancelled', bg: '#f0fdf4', border: '#bbf7d0', color: '#15803d', icon: <TrendingUp size={22} /> },
+                        { label: 'Total Orders', value: totalOrders, sub: `${pendingOrders} pending`, bg: '#eff6ff', border: '#bfdbfe', color: '#1d4ed8', icon: <ShoppingBag size={22} /> },
+                        { label: 'Avg Order Value', value: `₱${avgOrderValue}`, sub: 'per completed order', bg: '#fefce8', border: '#fde68a', color: '#b45309', icon: <BarChart2 size={22} /> },
+                        { label: 'Completion Rate', value: `${completionRate}%`, sub: `${completedOrders} completed`, bg: '#fdf4ff', border: '#e9d5ff', color: '#7c3aed', icon: <ArrowUpRight size={22} /> },
+                        { label: 'Cancelled', value: cancelledOrders, sub: 'orders', bg: '#fff1f2', border: '#fecdd3', color: '#be123c', icon: <TrendingDown size={22} /> },
+                    ].map((kpi, i) => (
+                        <div key={i} style={{ background: kpi.bg, padding: '20px', borderRadius: '16px', border: `1px solid ${kpi.border}` }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div>
+                                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: kpi.color, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{kpi.label}</div>
+                                    <div style={{ fontSize: '2rem', fontWeight: 800, color: kpi.color, lineHeight: 1 }}>{kpi.value}</div>
+                                    <div style={{ fontSize: '0.78rem', color: kpi.color, opacity: 0.7, marginTop: '6px' }}>{kpi.sub}</div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.6)', borderRadius: '10px', padding: '8px', color: kpi.color }}>{kpi.icon}</div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Revenue Chart + Order Type Breakdown */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+
+                    {/* Bar Chart */}
+                    <div style={{ background: 'white', padding: '24px', borderRadius: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+                        <h3 style={{ margin: '0 0 20px', fontSize: '1.05rem', fontWeight: 700 }}>Revenue Over Time</h3>
+                        {dailyRevenue.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No time-range chart available for All Time</div>
+                        ) : (() => {
+                            const barCount = dailyRevenue.length;
+                            const isMany = barCount > 10;
+                            const labelEvery = barCount > 20 ? 5 : barCount > 10 ? 3 : 1;
+                            const showValues = barCount <= 10;
+                            const chartGap = isMany ? '2px' : '6px';
+                            const minBarWidth = isMany ? '12px' : 'auto';
+                            const scrollRef = React.createRef();
+                            const scroll = (dir) => {
+                                if (scrollRef.current) {
+                                    scrollRef.current.scrollBy({ left: dir * 200, behavior: 'smooth' });
+                                }
+                            };
+                            return (
+                                <div style={{ position: 'relative' }}>
+                                    {/* Left arrow */}
+                                    {isMany && (
+                                        <button
+                                            onClick={() => scroll(-1)}
+                                            style={{
+                                                position: 'absolute', left: '-4px', top: '50%', transform: 'translateY(-50%)',
+                                                zIndex: 2, width: '32px', height: '32px', borderRadius: '50%',
+                                                background: 'white', border: '1px solid #e2e8f0', cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)', color: 'var(--primary)'
+                                            }}
+                                            aria-label="Scroll left"
+                                        >
+                                            <ChevronLeft size={18} />
+                                        </button>
+                                    )}
+                                    {/* Right arrow */}
+                                    {isMany && (
+                                        <button
+                                            onClick={() => scroll(1)}
+                                            style={{
+                                                position: 'absolute', right: '-4px', top: '50%', transform: 'translateY(-50%)',
+                                                zIndex: 2, width: '32px', height: '32px', borderRadius: '50%',
+                                                background: 'white', border: '1px solid #e2e8f0', cursor: 'pointer',
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.1)', color: 'var(--primary)'
+                                            }}
+                                            aria-label="Scroll right"
+                                        >
+                                            <ChevronRight size={18} />
+                                        </button>
+                                    )}
+                                    <div
+                                        ref={scrollRef}
+                                        style={{
+                                            overflowX: isMany ? 'auto' : 'visible',
+                                            margin: isMany ? '0 28px' : '0 -4px',
+                                            padding: '0 4px',
+                                            scrollbarWidth: 'none',
+                                            msOverflowStyle: 'none'
+                                        }}
+                                    >
+                                        <style>{`
+                                            .rev-chart-scroll::-webkit-scrollbar { display: none; }
+                                        `}</style>
+                                        <div className="rev-chart-scroll" style={{ display: 'flex', alignItems: 'flex-end', gap: chartGap, height: '180px', minWidth: isMany ? `${barCount * 22}px` : 'auto' }}>
+                                            {dailyRevenue.map(([label, value, dateInfo], idx) => (
+                                                <div key={label} style={{ flex: isMany ? 'none' : 1, width: isMany ? minBarWidth : 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: isMany ? '3px' : '6px', height: '100%', justifyContent: 'flex-end' }}>
+                                                    {showValues && (
+                                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                                                            {value > 0 ? `₱${value >= 1000 ? (value/1000).toFixed(1)+'k' : value}` : ''}
+                                                        </div>
+                                                    )}
+                                                    <div
+                                                        title={`${label}: ₱${value.toLocaleString()}`}
+                                                        style={{
+                                                            width: '100%',
+                                                            height: `${Math.max((value / maxRevDay) * (showValues ? 140 : 155), value > 0 ? 6 : 2)}px`,
+                                                            background: value > 0 ? 'linear-gradient(180deg, #0ea5e9, #0284c7)' : '#e2e8f0',
+                                                            borderRadius: isMany ? '3px 3px 2px 2px' : '6px 6px 4px 4px',
+                                                            transition: 'height 0.4s ease',
+                                                            minHeight: '2px'
+                                                        }}
+                                                    />
+                                                    <div style={{ fontSize: isMany ? '0.55rem' : '0.6rem', color: 'var(--text-muted)', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', maxWidth: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', visibility: (idx % labelEvery === 0 || idx === barCount - 1) ? 'visible' : 'hidden' }}>
+                                                        <span style={{ fontSize: isMany ? '0.65rem' : '0.7rem', fontWeight: 700, color: 'var(--text-color)' }}>{dateInfo?.day}</span>
+                                                        <span style={{ fontSize: isMany ? '0.5rem' : '0.55rem' }}>{dateInfo?.month}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Order Type Donut */}
+                    <div style={{ background: 'white', padding: '24px', borderRadius: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+                        <h3 style={{ margin: '0 0 20px', fontSize: '1.05rem', fontWeight: 700 }}>Order Types</h3>
+                        {Object.keys(typeBreakdown).length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>No orders yet</div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                {Object.entries(typeBreakdown).map(([type, count], i) => {
+                                    const pct = ((count / typeTotal) * 100).toFixed(0);
+                                    return (
+                                        <div key={type}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{type}</span>
+                                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: typeColors[i % typeColors.length] }}>{count} ({pct}%)</span>
+                                            </div>
+                                            <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                                                <div style={{ height: '100%', width: `${pct}%`, background: typeColors[i % typeColors.length], borderRadius: '99px', transition: 'width 0.5s ease' }} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Top Products + Payment Methods */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+
+                    {/* Top Products */}
+                    <div style={{ background: 'white', padding: '24px', borderRadius: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+                        <h3 style={{ margin: '0 0 20px', fontSize: '1.05rem', fontWeight: 700 }}>🏆 Top Products</h3>
+                        {topProducts.length === 0 ? (
+                            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px 0' }}>No products ordered yet.</p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                {topProducts.map(([name, qty], i) => (
+                                    <div key={name}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 600, flex: 1, marginRight: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`} {name}
+                                            </span>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{qty} sold</span>
+                                        </div>
+                                        <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                                            <div style={{ height: '100%', width: `${(qty / maxProd) * 100}%`, background: 'linear-gradient(90deg, var(--primary), #38bdf8)', borderRadius: '99px' }} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Payment Method Breakdown */}
+                    <div style={{ background: 'white', padding: '24px', borderRadius: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+                        <h3 style={{ margin: '0 0 20px', fontSize: '1.05rem', fontWeight: 700 }}>💳 Payment Methods</h3>
+                        {Object.keys(payBreakdown).length === 0 ? (
+                            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px 0' }}>No payment data yet.</p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                                {Object.entries(payBreakdown)
+                                    .sort(([,a],[,b]) => b - a)
+                                    .map(([method, count], i) => {
+                                        const pct = ((count / totalOrders) * 100).toFixed(0);
+                                        const pmColors = ['#0ea5e9','#10b981','#f59e0b','#8b5cf6','#ef4444'];
+                                        return (
+                                            <div key={method}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{method}</span>
+                                                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: pmColors[i % pmColors.length] }}>{count} ({pct}%)</span>
+                                                </div>
+                                                <div style={{ height: '6px', background: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+                                                    <div style={{ height: '100%', width: `${pct}%`, background: pmColors[i % pmColors.length], borderRadius: '99px' }} />
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                }
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Recent Orders Summary Table */}
+                <div style={{ background: 'white', padding: '24px', borderRadius: '20px', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700 }}>Recent Orders</h3>
+                        {filteredOrders.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    const headers = ['Customer', 'Phone', 'Type', 'Payment Method', 'Items', 'Amount', 'Delivery Fee', 'Status', 'Date'];
+                                    const escapeCSV = (val) => {
+                                        const str = String(val ?? '');
+                                        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                                            return '"' + str.replace(/"/g, '""') + '"';
+                                        }
+                                        return str;
+                                    };
+                                    const rows = filteredOrders.map(o => [
+                                        escapeCSV(o.customer_details?.name),
+                                        escapeCSV(o.customer_details?.phone),
+                                        escapeCSV((o.order_type || '').toUpperCase()),
+                                        escapeCSV(o.payment_method),
+                                        escapeCSV((o.items || []).join('; ')),
+                                        o.total_amount || 0,
+                                        o.delivery_fee || 0,
+                                        escapeCSV(o.status || 'Pending'),
+                                        escapeCSV(o.timestamp ? new Date(o.timestamp).toLocaleString('en-PH') : 'N/A')
+                                    ]);
+                                    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `orders_${dateRange}_${new Date().toISOString().slice(0,10)}.csv`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                    showMessage('CSV downloaded!');
+                                }}
+                                style={{
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                    padding: '8px 16px', borderRadius: '10px', border: '1px solid #e2e8f0',
+                                    background: '#f8fafc', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem',
+                                    color: 'var(--primary)', transition: 'all 0.2s'
+                                }}
+                            >
+                                <Download size={16} /> Download CSV
+                            </button>
+                        )}
+                    </div>
+                    {filteredOrders.length === 0 ? (
+                        <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '30px 0' }}>No orders in this period.</p>
+                    ) : (
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
+                                <thead>
+                                    <tr style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>Customer</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>Type</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>Amount</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>Status</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700 }}>Date</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700 }}>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredOrders.slice(0, 10).map((order, idx) => {
+                                        const statusStyle = {
+                                            Completed: { bg: '#dcfce7', color: '#15803d' },
+                                            Pending: { bg: '#fef9c3', color: '#854d0e' },
+                                            Cancelled: { bg: '#fee2e2', color: '#b91c1c' },
+                                            Preparing: { bg: '#e0f2fe', color: '#0369a1' },
+                                            Ready: { bg: '#e9d5ff', color: '#6d28d9' },
+                                        }[order.status] || { bg: '#f1f5f9', color: '#64748b' };
+                                        return (
+                                            <tr key={order.id || idx} style={{ background: '#f8fafc' }}>
+                                                <td style={{ padding: '12px', borderTopLeftRadius: '10px', borderBottomLeftRadius: '10px', fontWeight: 600 }}>{order.customer_details?.name || 'N/A'}</td>
+                                                <td style={{ padding: '12px', fontSize: '0.85rem' }}>{(order.order_type || 'N/A').toUpperCase()}</td>
+                                                <td style={{ padding: '12px', fontWeight: 700, color: 'var(--primary)' }}>₱{Number(order.total_amount || 0).toLocaleString()}</td>
+                                                <td style={{ padding: '12px' }}>
+                                                    <span style={{ padding: '3px 10px', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700, background: statusStyle.bg, color: statusStyle.color }}>
+                                                        {order.status || 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                                                    {order.timestamp ? new Date(order.timestamp).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                                                </td>
+                                                <td style={{ padding: '12px', borderTopRightRadius: '10px', borderBottomRightRadius: '10px', textAlign: 'center' }}>
+                                                    <button
+                                                        onClick={async () => {
+                                                            if (window.confirm(`Delete order from ${order.customer_details?.name || 'unknown'}?`)) {
+                                                                const { error } = await supabase.from('orders').delete().eq('id', order.id);
+                                                                if (error) {
+                                                                    console.error(error);
+                                                                    showMessage(`Error deleting: ${error.message}`);
+                                                                    return;
+                                                                }
+                                                                setOrders(orders.filter(o => o.id !== order.id));
+                                                                showMessage('Order deleted.');
+                                                            }
+                                                        }}
+                                                        title="Delete order"
+                                                        style={{
+                                                            background: '#fee2e2', border: 'none', borderRadius: '8px',
+                                                            padding: '6px 10px', cursor: 'pointer', color: '#ef4444',
+                                                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                                            fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.2s'
+                                                        }}
+                                                    >
+                                                        <Trash2 size={14} /> Delete
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     // --- MAIN RENDER ---
     return (
         <div className="admin-layout">
@@ -1321,6 +1785,7 @@ const AdminDashboard = () => {
                 </div>
 
                 <nav className="admin-sidebar-nav">
+                    <SidebarItem icon={<BarChart2 size={20} />} label="Analytics" active={activeTab === 'analytics'} onClick={() => setActiveTab('analytics')} />
                     <SidebarItem icon={<List size={20} />} label="Menu Items" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
                     <SidebarItem icon={<Tag size={20} />} label="Categories" active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} />
                     <SidebarItem icon={<ShoppingBag size={20} />} label="Orders" active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} />
@@ -1367,6 +1832,7 @@ const AdminDashboard = () => {
                     </div>
                 )}
 
+                {activeTab === 'analytics' && <AnalyticsDashboard />}
                 {activeTab === 'menu' && <MenuManager />}
                 {activeTab === 'categories' && <CategoryManager />}
                 {activeTab === 'orders' && <OrderHistory />}
