@@ -385,8 +385,7 @@ const Home = () => {
             const { error } = await supabase.from('orders').insert([newOrder]);
             if (error) {
                 console.error('Error saving order to Supabase:', error);
-                showBrandedMessage('We had trouble saving your order to our system. Please try again or contact us directly.', 'error');
-                return;
+                showBrandedMessage('We had trouble saving your order to our system, but you can still proceed to Messenger.', 'warning');
             }
 
             // Backup to LocalStorage
@@ -398,9 +397,44 @@ const Home = () => {
                 console.warn("Failed to backup order to localStorage");
             }
 
+            // Prepare Messenger message (simplified to avoid spam detection)
+            const summary = itemDetails.join('\n');
+            let info = `${isDeliveryType(orderType) ? 'Designated Name' : 'Name'}: ${customerDetails.name}`;
+            if (isPickupType(orderType)) {
+                info += ` | Phone: ${customerDetails.phone} | Pickup Time: ${customerDetails.pickup_time}`;
+                if (customerDetails.preferred_time) info += ` | Preferred Time: ${customerDetails.preferred_time}`;
+            }
+            if (isDeliveryType(orderType)) {
+                info += ` | Phone: ${customerDetails.phone} | Address: ${customerDetails.address}`;
+                info += ` | Barangay: ${selectedBarangay?.barangay_name || 'N/A'}`;
+                if (customerDetails.preferred_time) info += ` | Preferred Delivery Time: ${customerDetails.preferred_time}`;
+            }
+
+            let message = `Hi! New order for ${customerDetails.name}:
+            
+${summary}
+
+Subtotal: P${cartTotal}`;
+
+            if (isDeliveryType(orderType) && deliveryFee > 0) {
+                message += `\nDelivery Fee: P${deliveryFee}`;
+            }
+
+            message += `\nGrand Total: P${grandTotal}
+Type: ${getOrderType(orderType)}
+${info}`.trim();
+
+            const messengerUrl = `https://m.me/${storeSettings.facebook_messenger_link || '61579032505526'}?text=${encodeURIComponent(message)}`;
+
             setOrderSuccess(true);
             setCartItems([]);
-            showBrandedMessage('Order placed successfully!', 'success');
+            showBrandedMessage('Order confirmed! Opening Messenger...', 'success');
+
+            const opened = window.open(messengerUrl, '_blank');
+            if (!opened) {
+                console.log("Popup blocked or failed to open automatically.");
+                showBrandedMessage('Please allow popups to open Messenger. You can also copy the message above.', 'warning');
+            }
         } catch (err) {
             console.error('Order process error:', err);
             showBrandedMessage('Something went wrong. Please try again or contact us directly.', 'error');
@@ -530,8 +564,8 @@ const Home = () => {
                         {/* Step 3 */}
                         <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '20px', borderRadius: '15px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
                             <div style={{ background: '#e0f2fe', width: '50px', height: '50px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--primary)' }}><MessageCircle size={24} /></div>
-                            <h3 style={{ fontSize: '1rem', marginBottom: '5px', fontWeight: 700 }}>Place Orders</h3>
-                            <p style={{ color: 'var(--text-muted)', lineHeight: '1.3', fontSize: '0.8rem', margin: 0 }}>Quick and easy checkout.</p>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '5px', fontWeight: 700 }}>Send Orders</h3>
+                            <p style={{ color: 'var(--text-muted)', lineHeight: '1.3', fontSize: '0.8rem', margin: 0 }}>Send via Messenger.</p>
                         </div>
                     </div>
                 </div>
@@ -650,8 +684,8 @@ const Home = () => {
                         {orderSuccess ? (
                             <div style={{ textAlign: 'center', padding: '40px 0' }}>
                                 <div style={{ fontSize: '4rem', marginBottom: '20px' }}>🎉</div>
-                                <h2 style={{ color: 'var(--primary)', marginBottom: '10px' }}>Order Placed Successfully!</h2>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '30px' }}>Your order has been recorded and will be processed soon. Thank you for your order!</p>
+                                <h2 style={{ color: 'var(--primary)', marginBottom: '10px' }}>Order Placed!</h2>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '30px' }}>Your order has been recorded and sent to our Messenger chat. Thank you for your order!</p>
                                 <button
                                     onClick={() => { setIsCheckoutOpen(false); setOrderSuccess(false); }}
                                     className="btn-primary"
