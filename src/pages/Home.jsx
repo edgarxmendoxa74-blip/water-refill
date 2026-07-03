@@ -276,6 +276,7 @@ const Home = () => {
         address: '',
         landmark: '',
         pickup_time: '',
+        preferred_time: '',
         selectedBarangayId: ''
     });
 
@@ -338,7 +339,7 @@ const Home = () => {
             return;
         }
 
-        const { name, phone, table_number, address, pickup_time, selectedBarangayId } = customerDetails;
+        const { name, phone, table_number, address, pickup_time, preferred_time, selectedBarangayId } = customerDetails;
         const typeName = getOrderType(orderType).toLowerCase();
 
         if (isPickupType(orderType) && (!name || !phone || !pickup_time)) { 
@@ -384,7 +385,8 @@ const Home = () => {
             const { error } = await supabase.from('orders').insert([newOrder]);
             if (error) {
                 console.error('Error saving order to Supabase:', error);
-                showBrandedMessage('We had trouble saving your order to our system, but you can still proceed to Messenger.', 'warning');
+                showBrandedMessage('We had trouble saving your order to our system. Please try again or contact us directly.', 'error');
+                return;
             }
 
             // Backup to LocalStorage
@@ -396,40 +398,9 @@ const Home = () => {
                 console.warn("Failed to backup order to localStorage");
             }
 
-            // Prepare Messenger message (simplified to avoid spam detection)
-            const summary = itemDetails.join('\n');
-            let info = `${isDeliveryType(orderType) ? 'Designated Name' : 'Name'}: ${customerDetails.name}`;
-            if (isPickupType(orderType)) info += ` | Phone: ${customerDetails.phone} | Time: ${customerDetails.pickup_time}`;
-            if (isDeliveryType(orderType)) {
-                info += ` | Phone: ${customerDetails.phone} | Address: ${customerDetails.address}`;
-                info += ` | Barangay: ${selectedBarangay?.barangay_name || 'N/A'}`;
-            }
-
-            let message = `Hi! New order for ${customerDetails.name}:
-            
-${summary}
-
-Subtotal: P${cartTotal}`;
-
-            if (isDeliveryType(orderType) && deliveryFee > 0) {
-                message += `\nDelivery Fee: P${deliveryFee}`;
-            }
-
-            message += `\nGrand Total: P${grandTotal}
-Type: ${getOrderType(orderType)}
-${info}`.trim();
-
-            const messengerUrl = `https://m.me/${storeSettings.facebook_messenger_link || '61579032505526'}?text=${encodeURIComponent(message)}`;
-
             setOrderSuccess(true);
             setCartItems([]);
-            showBrandedMessage('Order confirmed! Opening Messenger...', 'success');
-
-            const opened = window.open(messengerUrl, '_blank');
-            if (!opened) {
-                console.log("Popup blocked or failed to open automatically.");
-                showBrandedMessage('Please allow popups to open Messenger. You can also copy the message above.', 'warning');
-            }
+            showBrandedMessage('Order placed successfully!', 'success');
         } catch (err) {
             console.error('Order process error:', err);
             showBrandedMessage('Something went wrong. Please try again or contact us directly.', 'error');
@@ -559,8 +530,8 @@ ${info}`.trim();
                         {/* Step 3 */}
                         <div style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '20px', borderRadius: '15px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
                             <div style={{ background: '#e0f2fe', width: '50px', height: '50px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', color: 'var(--primary)' }}><MessageCircle size={24} /></div>
-                            <h3 style={{ fontSize: '1rem', marginBottom: '5px', fontWeight: 700 }}>Send Orders</h3>
-                            <p style={{ color: 'var(--text-muted)', lineHeight: '1.3', fontSize: '0.8rem', margin: 0 }}>Send via Messenger.</p>
+                            <h3 style={{ fontSize: '1rem', marginBottom: '5px', fontWeight: 700 }}>Place Orders</h3>
+                            <p style={{ color: 'var(--text-muted)', lineHeight: '1.3', fontSize: '0.8rem', margin: 0 }}>Quick and easy checkout.</p>
                         </div>
                     </div>
                 </div>
@@ -679,23 +650,14 @@ ${info}`.trim();
                         {orderSuccess ? (
                             <div style={{ textAlign: 'center', padding: '40px 0' }}>
                                 <div style={{ fontSize: '4rem', marginBottom: '20px' }}>🎉</div>
-                                <h2 style={{ color: 'var(--primary)', marginBottom: '10px' }}>Order Placed!</h2>
-                                <p style={{ color: 'var(--text-muted)', marginBottom: '30px' }}>Your order has been recorded. Click the button below to confirm it via Messenger if the chat didn't open automatically.</p>
-                                <button
-                                    className="btn-accent"
-                                    onClick={() => {
-                                        const message = "Hello! I just placed an order on your website.";
-                                        window.open(`https://m.me/61579032505526?text=${encodeURIComponent(message)}`, '_blank');
-                                    }}
-                                    style={{ width: '100%', padding: '15px', borderRadius: '12px', fontWeight: 800 }}
-                                >
-                                    Open Messenger Chat
-                                </button>
+                                <h2 style={{ color: 'var(--primary)', marginBottom: '10px' }}>Order Placed Successfully!</h2>
+                                <p style={{ color: 'var(--text-muted)', marginBottom: '30px' }}>Your order has been recorded and will be processed soon. Thank you for your order!</p>
                                 <button
                                     onClick={() => { setIsCheckoutOpen(false); setOrderSuccess(false); }}
-                                    style={{ marginTop: '20px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', textDecoration: 'underline' }}
+                                    className="btn-primary"
+                                    style={{ width: '100%', padding: '15px', borderRadius: '12px', fontWeight: 800 }}
                                 >
-                                    Close
+                                    Continue Shopping
                                 </button>
                             </div>
                         ) : (
@@ -791,7 +753,18 @@ ${info}`.trim();
                                             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                                                 <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>{isDeliveryType(orderType) ? 'Designated Name' : 'Full Name'}</label><input type="text" value={customerDetails.name} onChange={(e) => setCustomerDetails({ ...customerDetails, name: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>
                                                 <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Phone</label><input type="tel" value={customerDetails.phone} onChange={(e) => setCustomerDetails({ ...customerDetails, phone: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>
-                                                {isPickupType(orderType) && <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Time</label><input type="time" value={customerDetails.pickup_time} onChange={(e) => setCustomerDetails({ ...customerDetails, pickup_time: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>}
+                                                {isPickupType(orderType) && (
+                                                    <>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Pickup Time</label>
+                                                            <input type="time" value={customerDetails.pickup_time} onChange={(e) => setCustomerDetails({ ...customerDetails, pickup_time: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} />
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Preferred Time <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                                                            <input type="text" value={customerDetails.preferred_time} onChange={(e) => setCustomerDetails({ ...customerDetails, preferred_time: e.target.value })} placeholder="e.g. Morning, Afternoon, 2:00 PM" style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} />
+                                                        </div>
+                                                    </>
+                                                )}
                                                 
                                                 {isDeliveryType(orderType) && (
                                                     <>
@@ -809,6 +782,10 @@ ${info}`.trim();
                                                             )}
                                                         </div>
                                                         <div><label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Address Details</label><textarea value={customerDetails.address} onChange={(e) => setCustomerDetails({ ...customerDetails, address: e.target.value })} style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} /></div>
+                                                        <div>
+                                                            <label style={{ display: 'block', fontSize: '0.9rem', marginBottom: '5px', fontWeight: 600 }}>Preferred Delivery Time <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+                                                            <input type="text" value={customerDetails.preferred_time} onChange={(e) => setCustomerDetails({ ...customerDetails, preferred_time: e.target.value })} placeholder="e.g. Morning, Afternoon, 2:00 PM" style={{ padding: '12px', width: '100%', borderRadius: '10px', border: '1px solid #e2e8f0' }} />
+                                                        </div>
                                                     </>
                                                 )}
                                                 
