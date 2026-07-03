@@ -385,7 +385,6 @@ const Home = () => {
             const { error } = await supabase.from('orders').insert([newOrder]);
             if (error) {
                 console.error('Error saving order to Supabase:', error);
-                showBrandedMessage('We had trouble saving your order to our system, but you can still proceed to Messenger.', 'warning');
             }
 
             // Backup to LocalStorage
@@ -427,13 +426,8 @@ ${info}`.trim();
 
             setOrderSuccess(true);
             setCartItems([]);
-            showBrandedMessage('Order confirmed! Opening Messenger...', 'success');
 
-            const opened = window.open(messengerUrl, '_blank');
-            if (!opened) {
-                console.log("Popup blocked or failed to open automatically.");
-                showBrandedMessage('Please allow popups to open Messenger. You can also copy the message above.', 'warning');
-            }
+            window.open(messengerUrl, '_blank');
         } catch (err) {
             console.error('Order process error:', err);
             showBrandedMessage('Something went wrong. Please try again or contact us directly.', 'error');
