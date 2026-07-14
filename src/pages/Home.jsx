@@ -236,24 +236,30 @@ const Home = () => {
 
                 // Other settings
                 if (payData && payData.length > 0) { setPaymentSettings(payData); setLocalData('paymentSettings', payData); }
-                if (typeData && typeData.length > 0) {
-                    // Merge with default types to ensure Delivery & Pick Up always exist
-                    const defaultTypes = [
-                        { id: 'delivery', name: 'Delivery', is_active: true },
-                        { id: 'pickup', name: 'Pick Up', is_active: true }
-                    ];
-                    const merged = defaultTypes.map(dt => {
-                        const fromDb = typeData.find(t => t.id === dt.id);
-                        return fromDb || dt;
-                    });
-                    // Add any extra types from DB that aren't in defaults
-                    typeData.forEach(t => {
-                        if (!merged.find(m => m.id === t.id)) merged.push(t);
-                    });
-                    const activeTypes = merged.filter(t => t.is_active !== false);
-                    setOrderTypes(activeTypes);
-                    setLocalData('orderTypes', activeTypes);
-                }
+                // Merge with default types to ensure Delivery & Pick Up always exist
+                const defaultTypes = [
+                    { id: 'delivery', name: 'Delivery', is_active: true },
+                    { id: 'pickup', name: 'Pick Up', is_active: true }
+                ];
+                const dbTypes = typeData || [];
+                const merged = defaultTypes.map(dt => {
+                    const fromDb = dbTypes.find(t => 
+                        t.id === dt.id || 
+                        t.name.toLowerCase().replace(/\s/g, '') === dt.name.toLowerCase().replace(/\s/g, '')
+                    );
+                    return fromDb ? { ...dt, ...fromDb } : dt;
+                });
+                // Add any extra types from DB that aren't in defaults
+                dbTypes.forEach(t => {
+                    const isDefault = merged.some(m => 
+                        m.id === t.id || 
+                        m.name.toLowerCase().replace(/\s/g, '') === t.name.toLowerCase().replace(/\s/g, '')
+                    );
+                    if (!isDefault) merged.push(t);
+                });
+                const activeTypes = merged.filter(t => t.is_active !== false);
+                setOrderTypes(activeTypes);
+                setLocalData('orderTypes', activeTypes);
                 if (bgData) { setDeliveryBarangays(bgData); setLocalData('deliveryBarangays', bgData); }
                 if (storeData) {
                     setStoreSettings(prev => ({
