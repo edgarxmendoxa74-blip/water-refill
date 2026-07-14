@@ -236,7 +236,24 @@ const Home = () => {
 
                 // Other settings
                 if (payData && payData.length > 0) { setPaymentSettings(payData); setLocalData('paymentSettings', payData); }
-                if (typeData && typeData.length > 0) { setOrderTypes(typeData); setLocalData('orderTypes', typeData); }
+                if (typeData && typeData.length > 0) {
+                    // Merge with default types to ensure Delivery & Pick Up always exist
+                    const defaultTypes = [
+                        { id: 'delivery', name: 'Delivery', is_active: true },
+                        { id: 'pickup', name: 'Pick Up', is_active: true }
+                    ];
+                    const merged = defaultTypes.map(dt => {
+                        const fromDb = typeData.find(t => t.id === dt.id);
+                        return fromDb || dt;
+                    });
+                    // Add any extra types from DB that aren't in defaults
+                    typeData.forEach(t => {
+                        if (!merged.find(m => m.id === t.id)) merged.push(t);
+                    });
+                    const activeTypes = merged.filter(t => t.is_active !== false);
+                    setOrderTypes(activeTypes);
+                    setLocalData('orderTypes', activeTypes);
+                }
                 if (bgData) { setDeliveryBarangays(bgData); setLocalData('deliveryBarangays', bgData); }
                 if (storeData) {
                     setStoreSettings(prev => ({
@@ -729,6 +746,10 @@ ${info}`.trim();
                                                 {paymentSettings.find(m => m.id === paymentMethod) ? (
                                                     (() => {
                                                         const method = paymentSettings.find(m => m.id === paymentMethod);
+                                                        const hasDetails = method.qr_url || method.account_number || method.account_name;
+                                                        if (!hasDetails) {
+                                                            return <p style={{ textAlign: 'center', color: 'var(--text-muted)', margin: 0, fontWeight: 600 }}>Please prepare the payment upon delivery/pickup.</p>;
+                                                        }
                                                         return (
                                                             <div style={{ textAlign: 'center' }}>
                                                                 <h4 style={{ color: 'var(--primary)', marginBottom: '15px' }}>Send {method.name} Payment</h4>
@@ -737,19 +758,25 @@ ${info}`.trim();
                                                                         <img src={method.qr_url} style={{ width: '180px', height: '180px', borderRadius: '10px', objectFit: 'contain' }} alt="QR Code" />
                                                                     </div>
                                                                 )}
-                                                                <div style={{ background: 'white', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '5px' }}>Account Number</div>
-                                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '8px' }}>
-                                                                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary)' }}>{method.account_number}</div>
-                                                                        <button
-                                                                            onClick={() => { navigator.clipboard.writeText(method.account_number); alert('Copied!'); }}
-                                                                            style={{ border: 'none', background: 'var(--primary)', color: 'white', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, fontSize: '0.8rem' }}
-                                                                        >
-                                                                            <Copy size={14} /> Copy
-                                                                        </button>
+                                                                {(method.account_number || method.account_name) && (
+                                                                    <div style={{ background: 'white', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                                        {method.account_number && (
+                                                                            <>
+                                                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '5px' }}>Account Number</div>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginBottom: '8px' }}>
+                                                                                    <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--primary)' }}>{method.account_number}</div>
+                                                                                    <button
+                                                                                        onClick={() => { navigator.clipboard.writeText(method.account_number); alert('Copied!'); }}
+                                                                                        style={{ border: 'none', background: 'var(--primary)', color: 'white', borderRadius: '6px', padding: '6px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, fontSize: '0.8rem' }}
+                                                                                    >
+                                                                                        <Copy size={14} /> Copy
+                                                                                    </button>
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                        {method.account_name && <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>{method.account_name}</div>}
                                                                     </div>
-                                                                    <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>{method.account_name}</div>
-                                                                </div>
+                                                                )}
                                                             </div>
                                                         );
                                                     })()

@@ -40,6 +40,14 @@ import { categories as initialCategories, menuItems as initialItems } from '../d
 
 const inputStyle = { width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.95rem' };
 
+const isValidUUID = (id) => {
+    if (!id) return false;
+    const strId = String(id);
+    const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return regex.test(strId);
+};
+
+
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('analytics'); // analytics, menu, categories, orders, payment, orderTypes
@@ -77,14 +85,16 @@ const AdminDashboard = () => {
                 // Migration for existing users
                 return [
                     { id: 'gcash', name: 'GCash', accountNumber: parsed.gcash?.number || '', accountName: parsed.gcash?.name || '', qrUrl: parsed.gcash?.qrUrl || '' },
-                    { id: 'paymaya', name: 'PayMaya', accountNumber: parsed.paymaya?.number || '', accountName: parsed.paymaya?.name || '', qrUrl: parsed.paymaya?.qrUrl || '' }
+                    { id: 'paymaya', name: 'PayMaya', accountNumber: parsed.paymaya?.number || '', accountName: parsed.paymaya?.name || '', qrUrl: parsed.paymaya?.qrUrl || '' },
+                    { id: 'cod', name: 'Cash on Delivery', accountNumber: '', accountName: '', qrUrl: '' }
                 ];
             }
             return parsed;
         }
         return [
             { id: 'gcash', name: 'GCash', accountNumber: '', accountName: '', qrUrl: '' },
-            { id: 'paymaya', name: 'PayMaya', accountNumber: '', accountName: '', qrUrl: '' }
+            { id: 'paymaya', name: 'PayMaya', accountNumber: '', accountName: '', qrUrl: '' },
+            { id: 'cod', name: 'Cash on Delivery', accountNumber: '', accountName: '', qrUrl: '' }
         ];
     });
 
@@ -112,29 +122,53 @@ const AdminDashboard = () => {
         return saved ? JSON.parse(saved) : [];
     });
 
+    const getPaymentMethodName = (methodId) => {
+        if (!methodId) return 'N/A';
+        if (methodId === 'Cash/COD' || methodId === 'cod') return 'Cash / COD';
+        if (methodId === 'gcash' || methodId === '9ecb8123-7c24-4ac4-b9e2-91dfb916e438') return 'GCash';
+        if (methodId === 'paymaya') return 'PayMaya';
+        const found = paymentSettings.find(m => m.id === methodId);
+        return found ? found.name : methodId;
+    };
+
     // --- FETCH DATA FROM SUPABASE ---
     useEffect(() => {
         const fetchAdminData = async () => {
             try {
                 const { data: catData, error: catError } = await supabase.from('categories').select('*').order('sort_order', { ascending: true });
                 if (catError) throw catError;
-                if (catData) setCategories(catData);
+                if (catData) {
+                    setCategories(catData);
+                    localStorage.setItem('categories', JSON.stringify(catData));
+                }
 
                 const { data: itemData, error: itemError } = await supabase.from('menu_items').select('*').order('sort_order', { ascending: true });
                 if (itemError) throw itemError;
-                if (itemData) setItems(itemData);
+                if (itemData) {
+                    setItems(itemData);
+                    localStorage.setItem('menuItems', JSON.stringify(itemData));
+                }
 
                 const { data: payData, error: payError } = await supabase.from('payment_settings').select('*');
                 if (payError) throw payError;
-                if (payData) setPaymentSettings(payData);
+                if (payData) {
+                    setPaymentSettings(payData);
+                    localStorage.setItem('paymentSettings', JSON.stringify(payData));
+                }
 
                 const { data: typeData, error: typeError } = await supabase.from('order_types').select('*');
                 if (typeError) throw typeError;
-                if (typeData) setOrderTypes(typeData);
+                if (typeData) {
+                    setOrderTypes(typeData);
+                    localStorage.setItem('orderTypes', JSON.stringify(typeData));
+                }
 
                 const { data: storeData, error: storeError } = await supabase.from('store_settings').select('*').limit(1).single();
                 if (storeError && storeError.code !== 'PGRST116') throw storeError; // Ignore if no settings record yet
-                if (storeData) setStoreSettings(storeData);
+                if (storeData) {
+                    setStoreSettings(storeData);
+                    localStorage.setItem('storeSettings', JSON.stringify(storeData));
+                }
 
                 const { data: bgData, error: bgError } = await supabase.from('delivery_barangays').select('*').order('barangay_name', { ascending: true });
                 if (bgError && bgError.code !== '42P01') throw bgError; // Ignore if table missing initially
@@ -145,7 +179,10 @@ const AdminDashboard = () => {
 
                 const { data: orderData, error: orderError } = await supabase.from('orders').select('*').order('timestamp', { ascending: false });
                 if (orderError) throw orderError;
-                if (orderData) setOrders(orderData);
+                if (orderData) {
+                    setOrders(orderData);
+                    localStorage.setItem('orders', JSON.stringify(orderData));
+                }
             } catch (err) {
                 console.error('Error fetching admin data:', err);
                 showMessage(`Error loading data: ${err.message || 'Unknown error'}`);
@@ -255,8 +292,10 @@ const AdminDashboard = () => {
 
         const deleteItem = async (id) => {
             if (window.confirm('Delete this product?')) {
-                const { error } = await supabase.from('menu_items').delete().eq('id', id);
-                if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                if (isValidUUID(id)) {
+                    const { error } = await supabase.from('menu_items').delete().eq('id', id);
+                    if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                }
                 setItems(items.filter(i => i.id !== id));
                 showMessage('Product deleted.');
             }
@@ -504,8 +543,10 @@ const AdminDashboard = () => {
                 return;
             }
             if (window.confirm('Delete category?')) {
-                const { error } = await supabase.from('categories').delete().eq('id', id);
-                if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                if (isValidUUID(id)) {
+                    const { error } = await supabase.from('categories').delete().eq('id', id);
+                    if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                }
                 setCategories(categories.filter(c => c.id !== id));
                 showMessage('Category deleted.');
             }
@@ -723,8 +764,10 @@ const AdminDashboard = () => {
 
         const deleteMethod = async (id) => {
             if (window.confirm('Delete this payment method?')) {
-                const { error } = await supabase.from('payment_settings').delete().eq('id', id);
-                if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                if (isValidUUID(id)) {
+                    const { error } = await supabase.from('payment_settings').delete().eq('id', id);
+                    if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                }
                 setPaymentSettings(paymentSettings.filter(m => m.id !== id));
                 showMessage('Payment method deleted.');
             }
@@ -782,8 +825,8 @@ const AdminDashboard = () => {
                             style={{ display: 'grid', gap: '15px' }}
                         >
                             <input name="name" placeholder="Method Name (e.g. Bank Transfer, GCash)" required style={inputStyle} />
-                            <input name="accountNumber" placeholder="Account Number" required style={inputStyle} />
-                            <input name="accountName" placeholder="Account Name" required style={inputStyle} />
+                            <input name="accountNumber" placeholder="Account Number (Optional)" style={inputStyle} />
+                            <input name="accountName" placeholder="Account Name (Optional)" style={inputStyle} />
                             
                             <div style={{ display: 'grid', gap: '10px', padding: '15px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                                 <label style={{ fontSize: '0.9rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-color)' }}>
@@ -820,8 +863,8 @@ const AdminDashboard = () => {
                                         <button type="button" onClick={() => setEditingMethodId(null)} style={{ border: 'none', background: 'none', cursor: 'pointer' }}><X size={20} /></button>
                                     </div>
                                     <input name="name" defaultValue={method.name} placeholder="Method Name" required style={inputStyle} />
-                                    <input name="accountNumber" defaultValue={method.account_number} placeholder="Account Number" required style={inputStyle} />
-                                    <input name="accountName" defaultValue={method.account_name} placeholder="Account Name" required style={inputStyle} />
+                                    <input name="accountNumber" defaultValue={method.account_number} placeholder="Account Number (Optional)" style={inputStyle} />
+                                    <input name="accountName" defaultValue={method.account_name} placeholder="Account Name (Optional)" style={inputStyle} />
 
                                     {/* QR Image Upload in Edit Mode */}
                                     <div style={{ display: 'grid', gap: '10px', padding: '15px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
@@ -870,13 +913,15 @@ const AdminDashboard = () => {
                                             <h3 style={{ margin: 0, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                                                 {method.name}
                                             </h3>
-                                            <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                <span style={{ fontSize: '1.2rem', fontWeight: 700 }}>{method.account_number}</span>
-                                                <button onClick={() => { navigator.clipboard.writeText(method.account_number); showMessage('Number copied!'); }} style={{ border: 'none', background: '#e2e8f0', color: 'var(--primary)', borderRadius: '5px', padding: '5px', cursor: 'pointer' }} title="Copy Number">
-                                                    <Copy size={16} />
-                                                </button>
-                                            </div>
-                                            <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '5px' }}>{method.account_name}</div>
+                                            {method.account_number && (
+                                                <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                    <span style={{ fontSize: '1.2rem', fontWeight: 700 }}>{method.account_number}</span>
+                                                    <button onClick={() => { navigator.clipboard.writeText(method.account_number); showMessage('Number copied!'); }} style={{ border: 'none', background: '#e2e8f0', color: 'var(--primary)', borderRadius: '5px', padding: '5px', cursor: 'pointer' }} title="Copy Number">
+                                                        <Copy size={16} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {method.account_name && <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '5px' }}>{method.account_name}</div>}
                                         </div>
                                         <div style={{ display: 'flex', gap: '10px' }}>
                                             <button onClick={() => setEditingMethodId(method.id)} style={{ color: 'var(--primary)', border: 'none', background: 'none', cursor: 'pointer' }}><Edit2 size={20} /></button>
@@ -981,8 +1026,17 @@ const AdminDashboard = () => {
 
         const deleteOrder = async (orderId) => {
             if (window.confirm('Are you sure you want to delete this order?')) {
-                const { error } = await supabase.from('orders').delete().eq('id', orderId);
-                if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                if (isValidUUID(orderId)) {
+                    const { error } = await supabase.from('orders').delete().eq('id', orderId);
+                    if (error) { console.error(error); showMessage(`Error deleting: ${error.message}`); return; }
+                }
+                try {
+                    const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+                    const updatedLocal = localOrders.filter(o => o.id !== orderId);
+                    localStorage.setItem('orders', JSON.stringify(updatedLocal));
+                } catch (e) {
+                    console.warn('Failed to update local orders:', e);
+                }
                 setOrders(orders.filter(o => o.id !== orderId));
                 showMessage('Order deleted.');
             }
@@ -1114,7 +1168,7 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
                                 <div style={{ marginBottom: '10px', fontSize: '0.95rem' }}>
-                                    <strong>{order.customer_details?.name}</strong> • {order.payment_method}
+                                    <strong>{order.customer_details?.name}</strong> • {getPaymentMethodName(order.payment_method)}
                                     {order.customer_details?.phone && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{order.customer_details.phone}</div>}
                                     {order.customer_details?.tableNumber && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Table: {order.customer_details.tableNumber}</div>}
                                     {order.customer_details?.address && <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Address: {order.customer_details.address}</div>}
@@ -1199,8 +1253,10 @@ const AdminDashboard = () => {
         const deleteBarangay = async (id) => {
             if (window.confirm('Delete this barangay? This will remove it from the delivery options.')) {
                 try {
-                    const { error } = await supabase.from('delivery_barangays').delete().eq('id', id);
-                    if (error) throw error;
+                    if (isValidUUID(id)) {
+                        const { error } = await supabase.from('delivery_barangays').delete().eq('id', id);
+                        if (error) throw error;
+                    }
                     setDeliveryBarangays(deliveryBarangays.filter(b => b.id !== id));
                     showMessage('Barangay deleted.');
                 } catch (err) {
@@ -1385,21 +1441,30 @@ const AdminDashboard = () => {
 
         // --- ORDER TYPE BREAKDOWN ---
         const typeBreakdown = filteredOrders.reduce((acc, o) => {
-            let label = 'Unknown';
+            let label = null;
             const orderTypeValue = (o.order_type || '').toLowerCase();
             
             // Check if it's a UUID (looks like a UUID pattern)
             if (orderTypeValue.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
                 // Find the order type name from the orderTypes array
                 const orderTypeObj = orderTypes.find(ot => ot.id === o.order_type);
-                label = orderTypeObj ? orderTypeObj.name : 'Unknown';
+                label = orderTypeObj ? orderTypeObj.name : null;
             } else {
                 // Legacy format: check if it contains delivery or pickup keywords
                 const t = orderTypeValue;
-                label = t.includes('delivery') ? 'Delivery' : t.includes('pickup') || t.includes('pick') ? 'Pick Up' : (t || 'Unknown');
+                if (t.includes('delivery')) {
+                    label = 'Delivery';
+                } else if (t.includes('pickup') || t.includes('pick')) {
+                    label = 'Pick Up';
+                } else if (t) {
+                    label = t.charAt(0).toUpperCase() + t.slice(1);
+                }
             }
             
-            acc[label] = (acc[label] || 0) + 1;
+            // Only add to breakdown if label is valid
+            if (label) {
+                acc[label] = (acc[label] || 0) + 1;
+            }
             return acc;
         }, {});
         const typeTotal = Object.values(typeBreakdown).reduce((s, v) => s + v, 0) || 1;
@@ -1420,7 +1485,7 @@ const AdminDashboard = () => {
 
         // --- PAYMENT METHOD BREAKDOWN ---
         const payBreakdown = filteredOrders.reduce((acc, o) => {
-            const pm = o.payment_method === 'Cash/COD' ? 'Cash/COD' : (o.payment_method || 'Unknown');
+            const pm = getPaymentMethodName(o.payment_method);
             acc[pm] = (acc[pm] || 0) + 1;
             return acc;
         }, {});
@@ -1684,7 +1749,7 @@ const AdminDashboard = () => {
                                         escapeCSV(o.customer_details?.name),
                                         escapeCSV(o.customer_details?.phone),
                                         escapeCSV((o.order_type || '').toUpperCase()),
-                                        escapeCSV(o.payment_method),
+                                        escapeCSV(getPaymentMethodName(o.payment_method)),
                                         escapeCSV((o.items || []).join('; ')),
                                         o.total_amount || 0,
                                         o.delivery_fee || 0,
@@ -1753,11 +1818,20 @@ const AdminDashboard = () => {
                                                     <button
                                                         onClick={async () => {
                                                             if (window.confirm(`Delete order from ${order.customer_details?.name || 'unknown'}?`)) {
-                                                                const { error } = await supabase.from('orders').delete().eq('id', order.id);
-                                                                if (error) {
-                                                                    console.error(error);
-                                                                    showMessage(`Error deleting: ${error.message}`);
-                                                                    return;
+                                                                if (isValidUUID(order.id)) {
+                                                                    const { error } = await supabase.from('orders').delete().eq('id', order.id);
+                                                                    if (error) {
+                                                                        console.error(error);
+                                                                        showMessage(`Error deleting: ${error.message}`);
+                                                                        return;
+                                                                    }
+                                                                }
+                                                                try {
+                                                                    const localOrders = JSON.parse(localStorage.getItem('orders') || '[]');
+                                                                    const updatedLocal = localOrders.filter(o => o.id !== order.id);
+                                                                    localStorage.setItem('orders', JSON.stringify(updatedLocal));
+                                                                } catch (e) {
+                                                                    console.warn('Failed to update local orders:', e);
                                                                 }
                                                                 setOrders(orders.filter(o => o.id !== order.id));
                                                                 showMessage('Order deleted.');
